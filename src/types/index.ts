@@ -86,3 +86,47 @@ export interface XhtmlExport {
   /** Errors encountered during loading (for graceful degradation) */
   errors: string[];
 }
+
+/**
+ * Extracted article before database save
+ */
+export interface ExtractedArticle {
+  /** Article title (cleaned text) */
+  title: string;
+  /** Chapeau/intro text (cleaned, optional) */
+  chapeau: string | null;
+  /** Body content as cleaned HTML */
+  content: string;
+  /** Excerpt (first ~150 chars of body, plain text) */
+  excerpt: string | null;
+  /** Category/rubriek if detected */
+  category: string | null;
+  /** First page where article appears */
+  pageStart: number;
+  /** Last page where article appears */
+  pageEnd: number;
+  /** Source spreads (for debugging) */
+  sourceSpreadIndexes: number[];
+  /** Images referenced in this article (filenames) */
+  referencedImages: string[];
+}
+
+/**
+ * Intermediate element during parsing
+ */
+export interface ArticleElement {
+  type: "title" | "chapeau" | "body" | "author" | "category" | "image" | "unknown";
+  content: string;
+  className: string;
+  spreadIndex: number;
+  pageStart: number;
+  pageEnd: number;
+}
+
+/**
+ * Result of article extraction with errors for graceful degradation
+ */
+export interface ArticleExtractionResult {
+  articles: ExtractedArticle[];
+  errors: string[];
+}

@@ -54,7 +54,7 @@ development_status:
   2-1-upload-interface: done
   2-2-pdf-naar-images-converter: done
   2-3-xhtml-loader-structure-analyzer: done
-  2-4-artikel-extractie: backlog
+  2-4-artikel-extractie: done
   2-5-auteur-categorie-extractie: backlog
   2-6-rich-content-extractie: backlog
   2-7-verwerkingsorkestratie: backlog
