@@ -39,6 +39,10 @@ function createMockStyles(
     bodyClasses: ["Broodtekst", "Body"],
     authorClasses: ["Auteur", "Door"],
     categoryClasses: ["Rubriek", "Thema"],
+    subheadingClasses: ["Tussenkop"],
+    streamerClasses: ["Streamer"],
+    sidebarClasses: ["Kader"],
+    captionClasses: ["Bijschrift"],
     ...overrides,
   };
 }
@@ -101,6 +105,10 @@ function createMockArticle(
     pageEnd,
     sourceSpreadIndexes: [1],
     referencedImages: [],
+    subheadings: [],
+    streamers: [],
+    sidebars: [],
+    captions: new Map<string, string>(),
   };
 }
 

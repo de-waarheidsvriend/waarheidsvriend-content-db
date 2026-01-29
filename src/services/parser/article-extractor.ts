@@ -97,10 +97,36 @@ function extractElementsFromSpread(
   const categorySelector = styles.categoryClasses
     .map((c) => `.${c}`)
     .join(", ");
+  const subheadingSelector = styles.subheadingClasses
+    .map((c) => `.${c}`)
+    .join(", ");
+  const streamerSelector = styles.streamerClasses
+    .map((c) => `.${c}`)
+    .join(", ");
+  const sidebarSelector = styles.sidebarClasses.map((c) => `.${c}`).join(", ");
+  const captionSelector = styles.captionClasses.map((c) => `.${c}`).join(", ");
 
-  // Extract all semantic elements in document order
-  $("p, div, span, h1, h2, h3, h4, h5, h6").each((_, el) => {
+  // Extract all semantic elements in document order (including images)
+  $("p, div, span, h1, h2, h3, h4, h5, h6, img").each((_, el) => {
     const $el = $(el);
+    const tagName = el.type === "tag" ? el.name.toLowerCase() : "";
+
+    // Handle image elements separately
+    if (tagName === "img") {
+      const src = $el.attr("src") || "";
+      if (src) {
+        elements.push({
+          type: "image",
+          content: src,
+          className: "",
+          spreadIndex: spread.spreadIndex,
+          pageStart: spread.pageStart,
+          pageEnd: spread.pageEnd,
+        });
+      }
+      return;
+    }
+
     const className = $el.attr("class") || "";
     const html = $.html(el);
     const text = $el.text().trim();
@@ -109,9 +135,18 @@ function extractElementsFromSpread(
     if (!text) return;
 
     // Determine element type based on class
+    // Order matters: more specific patterns should be checked first
     let type: ArticleElement["type"] = "unknown";
 
-    if (titleSelector && $el.is(titleSelector)) {
+    if (subheadingSelector && $el.is(subheadingSelector)) {
+      type = "subheading";
+    } else if (streamerSelector && $el.is(streamerSelector)) {
+      type = "streamer";
+    } else if (sidebarSelector && $el.is(sidebarSelector)) {
+      type = "sidebar";
+    } else if (captionSelector && $el.is(captionSelector)) {
+      type = "caption";
+    } else if (titleSelector && $el.is(titleSelector)) {
       type = "title";
     } else if (chapeauSelector && $el.is(chapeauSelector)) {
       type = "chapeau";
@@ -129,22 +164,6 @@ function extractElementsFromSpread(
         type,
         content: html,
         className,
-        spreadIndex: spread.spreadIndex,
-        pageStart: spread.pageStart,
-        pageEnd: spread.pageEnd,
-      });
-    }
-  });
-
-  // Also extract image references
-  $("img").each((_, el) => {
-    const $el = $(el);
-    const src = $el.attr("src") || "";
-    if (src) {
-      elements.push({
-        type: "image",
-        content: src,
-        className: "",
         spreadIndex: spread.spreadIndex,
         pageStart: spread.pageStart,
         pageEnd: spread.pageEnd,
@@ -351,6 +370,46 @@ function buildExtractedArticle(
     return parts[parts.length - 1];
   });
 
+  // Extract subheadings (FR20)
+  const subheadingElements = elements.filter((el) => el.type === "subheading");
+  const subheadings = subheadingElements.map((el) =>
+    htmlToPlainText(el.content)
+  );
+
+  // Extract streamers/quotes (FR21)
+  const streamerElements = elements.filter((el) => el.type === "streamer");
+  const streamers = streamerElements.map((el) => htmlToPlainText(el.content));
+
+  // Extract sidebar/kader blocks (FR19) - keep as cleaned HTML
+  const sidebarElements = elements.filter((el) => el.type === "sidebar");
+  const sidebars = sidebarElements.map((el) => cleanHtml(el.content));
+
+  // Extract captions and try to associate with images
+  // Captions typically appear near images in the document
+  const captionElements = elements.filter((el) => el.type === "caption");
+  const captions = new Map<string, string>();
+
+  // Simple heuristic: match captions to images by position
+  // For each caption, find the nearest preceding image
+  for (let i = 0; i < captionElements.length; i++) {
+    const captionText = htmlToPlainText(captionElements[i].content);
+    // Find the image element that this caption likely belongs to
+    // by looking at elements before the caption
+    const captionIndex = elements.indexOf(captionElements[i]);
+    for (let j = captionIndex - 1; j >= 0; j--) {
+      if (elements[j].type === "image") {
+        const imageSrc = elements[j].content;
+        const parts = imageSrc.split("/");
+        const filename = parts[parts.length - 1];
+        // Only set if not already set (first caption wins)
+        if (!captions.has(filename)) {
+          captions.set(filename, captionText);
+        }
+        break;
+      }
+    }
+  }
+
   return {
     title,
     chapeau,
@@ -361,6 +420,10 @@ function buildExtractedArticle(
     pageEnd,
     sourceSpreadIndexes,
     referencedImages,
+    subheadings,
+    streamers,
+    sidebars,
+    captions,
   };
 }
 

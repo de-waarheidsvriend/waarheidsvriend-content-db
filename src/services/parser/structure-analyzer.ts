@@ -21,6 +21,45 @@ function classifyClassName(className: string): string | null {
   // Heuristic classification based on common Dutch/English terms
   // Order matters - more specific matches should come first
 
+  // Subheading patterns (must check before general "kop" patterns)
+  if (
+    lowerName.includes("tussenkop") ||
+    lowerName.includes("subheading") ||
+    lowerName.includes("subhead")
+  ) {
+    return "subheading";
+  }
+
+  // Streamer/quote patterns (must check before general patterns)
+  if (
+    lowerName.includes("streamer") ||
+    lowerName.includes("quote") ||
+    lowerName.includes("citaat") ||
+    lowerName.includes("pullquote")
+  ) {
+    return "streamer";
+  }
+
+  // Caption/bijschrift patterns
+  if (
+    lowerName.includes("fotobijschrift") ||
+    lowerName.includes("bijschrift") ||
+    lowerName.includes("caption") ||
+    lowerName.includes("onderschrift")
+  ) {
+    return "caption";
+  }
+
+  // Sidebar/kader patterns (check before body since kadertekst contains "tekst")
+  if (
+    lowerName.includes("kader") ||
+    lowerName.includes("sidebar") ||
+    lowerName.includes("inzet") ||
+    lowerName.includes("box")
+  ) {
+    return "sidebar";
+  }
+
   // Title patterns: kop, hoofdkop, titel, title
   if (
     lowerName.includes("hoofdkop") ||
@@ -66,8 +105,7 @@ function classifyClassName(className: string): string | null {
     lowerName.includes("plattetekst") ||
     lowerName.includes("brood") ||
     lowerName.includes("body") ||
-    lowerName.includes("basistekst") ||
-    lowerName.includes("kadertekst")
+    lowerName.includes("basistekst")
   ) {
     return "body";
   }
@@ -92,7 +130,11 @@ function addClassToCategories(
   bodyClasses: string[],
   authorClasses: string[],
   categoryClasses: string[],
-  articleBoundaryClasses: string[]
+  articleBoundaryClasses: string[],
+  subheadingClasses: string[],
+  streamerClasses: string[],
+  sidebarClasses: string[],
+  captionClasses: string[]
 ): void {
   // Skip if already classified
   if (classMap.has(className)) return;
@@ -118,6 +160,18 @@ function addClassToCategories(
     case "article-boundary":
       articleBoundaryClasses.push(className);
       break;
+    case "subheading":
+      subheadingClasses.push(className);
+      break;
+    case "streamer":
+      streamerClasses.push(className);
+      break;
+    case "sidebar":
+      sidebarClasses.push(className);
+      break;
+    case "caption":
+      captionClasses.push(className);
+      break;
   }
 }
 
@@ -135,6 +189,10 @@ export async function analyzeStyles(cssDir: string): Promise<StyleAnalysis> {
   const bodyClasses: string[] = [];
   const authorClasses: string[] = [];
   const categoryClasses: string[] = [];
+  const subheadingClasses: string[] = [];
+  const streamerClasses: string[] = [];
+  const sidebarClasses: string[] = [];
+  const captionClasses: string[] = [];
 
   try {
     const files = await readdir(cssDir);
@@ -163,7 +221,11 @@ export async function analyzeStyles(cssDir: string): Promise<StyleAnalysis> {
             bodyClasses,
             authorClasses,
             categoryClasses,
-            articleBoundaryClasses
+            articleBoundaryClasses,
+            subheadingClasses,
+            streamerClasses,
+            sidebarClasses,
+            captionClasses
           );
         }
       }
@@ -178,6 +240,10 @@ export async function analyzeStyles(cssDir: string): Promise<StyleAnalysis> {
   console.log(`  - Body classes: ${bodyClasses.join(", ") || "none"}`);
   console.log(`  - Author classes: ${authorClasses.join(", ") || "none"}`);
   console.log(`  - Category classes: ${categoryClasses.join(", ") || "none"}`);
+  console.log(`  - Subheading classes: ${subheadingClasses.join(", ") || "none"}`);
+  console.log(`  - Streamer classes: ${streamerClasses.join(", ") || "none"}`);
+  console.log(`  - Sidebar classes: ${sidebarClasses.join(", ") || "none"}`);
+  console.log(`  - Caption classes: ${captionClasses.join(", ") || "none"}`);
   console.log(
     `  - Article boundary classes: ${articleBoundaryClasses.join(", ") || "none"}`
   );
@@ -190,6 +256,10 @@ export async function analyzeStyles(cssDir: string): Promise<StyleAnalysis> {
     bodyClasses,
     authorClasses,
     categoryClasses,
+    subheadingClasses,
+    streamerClasses,
+    sidebarClasses,
+    captionClasses,
   };
 }
 
@@ -212,6 +282,10 @@ export async function analyzeHtmlClasses(
   const bodyClasses: string[] = [];
   const authorClasses: string[] = [];
   const categoryClasses: string[] = [];
+  const subheadingClasses: string[] = [];
+  const streamerClasses: string[] = [];
+  const sidebarClasses: string[] = [];
+  const captionClasses: string[] = [];
 
   try {
     const files = await readdir(htmlDir);
@@ -244,7 +318,11 @@ export async function analyzeHtmlClasses(
               bodyClasses,
               authorClasses,
               categoryClasses,
-              articleBoundaryClasses
+              articleBoundaryClasses,
+              subheadingClasses,
+              streamerClasses,
+              sidebarClasses,
+              captionClasses
             );
           }
         }
@@ -260,6 +338,10 @@ export async function analyzeHtmlClasses(
   console.log(`  - Body classes: ${bodyClasses.join(", ") || "none"}`);
   console.log(`  - Author classes: ${authorClasses.join(", ") || "none"}`);
   console.log(`  - Category classes: ${categoryClasses.join(", ") || "none"}`);
+  console.log(`  - Subheading classes: ${subheadingClasses.join(", ") || "none"}`);
+  console.log(`  - Streamer classes: ${streamerClasses.join(", ") || "none"}`);
+  console.log(`  - Sidebar classes: ${sidebarClasses.join(", ") || "none"}`);
+  console.log(`  - Caption classes: ${captionClasses.join(", ") || "none"}`);
   console.log(
     `  - Article boundary classes: ${articleBoundaryClasses.join(", ") || "none"}`
   );
@@ -272,6 +354,10 @@ export async function analyzeHtmlClasses(
     bodyClasses,
     authorClasses,
     categoryClasses,
+    subheadingClasses,
+    streamerClasses,
+    sidebarClasses,
+    captionClasses,
   };
 }
 
@@ -300,5 +386,9 @@ export function mergeStyleAnalysis(
     bodyClasses: mergeArrays(a.bodyClasses, b.bodyClasses),
     authorClasses: mergeArrays(a.authorClasses, b.authorClasses),
     categoryClasses: mergeArrays(a.categoryClasses, b.categoryClasses),
+    subheadingClasses: mergeArrays(a.subheadingClasses, b.subheadingClasses),
+    streamerClasses: mergeArrays(a.streamerClasses, b.streamerClasses),
+    sidebarClasses: mergeArrays(a.sidebarClasses, b.sidebarClasses),
+    captionClasses: mergeArrays(a.captionClasses, b.captionClasses),
   };
 }

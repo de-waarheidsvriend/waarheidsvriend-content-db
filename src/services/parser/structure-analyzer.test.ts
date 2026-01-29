@@ -209,6 +209,78 @@ describe("structure-analyzer", () => {
       expect(result.classMap.has("_idGenObjectAttribute-1")).toBe(false);
       expect(result.titleClasses).toContain("Titel");
     });
+
+    it("should identify subheading classes from CSS", async () => {
+      vi.mocked(readdir).mockResolvedValue(["styles.css"] as unknown as Awaited<
+        ReturnType<typeof readdir>
+      >);
+      vi.mocked(readFile).mockResolvedValue(`
+        .Tussenkop { font-size: 16px; }
+        .Hoofdartikel_Tussenkop-lichtblauw { color: blue; }
+        .Subheading { font-weight: bold; }
+      `);
+
+      const result = await analyzeStyles("/test/css");
+
+      expect(result.subheadingClasses).toContain("Tussenkop");
+      expect(result.subheadingClasses).toContain("Hoofdartikel_Tussenkop-lichtblauw");
+      expect(result.subheadingClasses).toContain("Subheading");
+    });
+
+    it("should identify streamer/quote classes from CSS", async () => {
+      vi.mocked(readdir).mockResolvedValue(["styles.css"] as unknown as Awaited<
+        ReturnType<typeof readdir>
+      >);
+      vi.mocked(readFile).mockResolvedValue(`
+        .Streamer { font-style: italic; }
+        .Artikelen_Streamer-Blauw-Gecentreerd { color: blue; }
+        .Quote { font-size: 18px; }
+        .Citaat { border-left: 3px solid; }
+      `);
+
+      const result = await analyzeStyles("/test/css");
+
+      expect(result.streamerClasses).toContain("Streamer");
+      expect(result.streamerClasses).toContain("Artikelen_Streamer-Blauw-Gecentreerd");
+      expect(result.streamerClasses).toContain("Quote");
+      expect(result.streamerClasses).toContain("Citaat");
+    });
+
+    it("should identify sidebar/kader classes from CSS", async () => {
+      vi.mocked(readdir).mockResolvedValue(["styles.css"] as unknown as Awaited<
+        ReturnType<typeof readdir>
+      >);
+      vi.mocked(readFile).mockResolvedValue(`
+        .Kader { border: 1px solid; }
+        .Kaders_Platte-tekst { font-size: 12px; }
+        .Sidebar { background: gray; }
+      `);
+
+      const result = await analyzeStyles("/test/css");
+
+      expect(result.sidebarClasses).toContain("Kader");
+      expect(result.sidebarClasses).toContain("Kaders_Platte-tekst");
+      expect(result.sidebarClasses).toContain("Sidebar");
+    });
+
+    it("should identify caption classes from CSS", async () => {
+      vi.mocked(readdir).mockResolvedValue(["styles.css"] as unknown as Awaited<
+        ReturnType<typeof readdir>
+      >);
+      vi.mocked(readFile).mockResolvedValue(`
+        .Fotobijschrift { font-size: 10px; }
+        .Artikelen_Fotobijschrift { color: gray; }
+        .Caption { font-style: italic; }
+        .Onderschrift { margin-top: 5px; }
+      `);
+
+      const result = await analyzeStyles("/test/css");
+
+      expect(result.captionClasses).toContain("Fotobijschrift");
+      expect(result.captionClasses).toContain("Artikelen_Fotobijschrift");
+      expect(result.captionClasses).toContain("Caption");
+      expect(result.captionClasses).toContain("Onderschrift");
+    });
   });
 
   describe("analyzeHtmlClasses", () => {
@@ -298,7 +370,7 @@ describe("structure-analyzer", () => {
         <html>
           <body>
             <div class="Hoofdartikel_Platte-tekst">Body text</div>
-            <div class="Kaders_Platte-tekst-schreefloos">Kadertekst</div>
+            <div class="Artikelen_Broodtekst">Broodtekst</div>
           </body>
         </html>
       `);
@@ -306,7 +378,7 @@ describe("structure-analyzer", () => {
       const result = await analyzeHtmlClasses("/test/html");
 
       expect(result.bodyClasses).toContain("Hoofdartikel_Platte-tekst");
-      expect(result.bodyClasses).toContain("Kaders_Platte-tekst-schreefloos");
+      expect(result.bodyClasses).toContain("Artikelen_Broodtekst");
     });
 
     it("should handle multiple classes in one attribute", async () => {
@@ -378,6 +450,10 @@ describe("structure-analyzer", () => {
         bodyClasses: [],
         authorClasses: [],
         categoryClasses: [],
+        subheadingClasses: [],
+        streamerClasses: [],
+        sidebarClasses: [],
+        captionClasses: [],
       };
 
       const b = {
@@ -388,6 +464,10 @@ describe("structure-analyzer", () => {
         bodyClasses: [],
         authorClasses: ["Auteur"],
         categoryClasses: [],
+        subheadingClasses: [],
+        streamerClasses: [],
+        sidebarClasses: [],
+        captionClasses: [],
       };
 
       const result = mergeStyleAnalysis(a, b);
@@ -407,6 +487,10 @@ describe("structure-analyzer", () => {
         bodyClasses: [],
         authorClasses: [],
         categoryClasses: [],
+        subheadingClasses: [],
+        streamerClasses: [],
+        sidebarClasses: [],
+        captionClasses: [],
       };
 
       const b = {
@@ -417,6 +501,10 @@ describe("structure-analyzer", () => {
         bodyClasses: [],
         authorClasses: [],
         categoryClasses: [],
+        subheadingClasses: [],
+        streamerClasses: [],
+        sidebarClasses: [],
+        captionClasses: [],
       };
 
       const result = mergeStyleAnalysis(a, b);
@@ -434,6 +522,10 @@ describe("structure-analyzer", () => {
         bodyClasses: ["Body-1"],
         authorClasses: ["Auteur-1"],
         categoryClasses: ["Rubriek-1"],
+        subheadingClasses: ["Tussenkop-1"],
+        streamerClasses: ["Streamer-1"],
+        sidebarClasses: ["Kader-1"],
+        captionClasses: ["Bijschrift-1"],
       };
 
       const b = {
@@ -444,6 +536,10 @@ describe("structure-analyzer", () => {
         bodyClasses: ["Body-2"],
         authorClasses: ["Auteur-2"],
         categoryClasses: ["Rubriek-2"],
+        subheadingClasses: ["Tussenkop-2"],
+        streamerClasses: ["Streamer-2"],
+        sidebarClasses: ["Kader-2"],
+        captionClasses: ["Bijschrift-2"],
       };
 
       const result = mergeStyleAnalysis(a, b);
@@ -460,6 +556,14 @@ describe("structure-analyzer", () => {
       expect(result.authorClasses).toContain("Auteur-2");
       expect(result.categoryClasses).toContain("Rubriek-1");
       expect(result.categoryClasses).toContain("Rubriek-2");
+      expect(result.subheadingClasses).toContain("Tussenkop-1");
+      expect(result.subheadingClasses).toContain("Tussenkop-2");
+      expect(result.streamerClasses).toContain("Streamer-1");
+      expect(result.streamerClasses).toContain("Streamer-2");
+      expect(result.sidebarClasses).toContain("Kader-1");
+      expect(result.sidebarClasses).toContain("Kader-2");
+      expect(result.captionClasses).toContain("Bijschrift-1");
+      expect(result.captionClasses).toContain("Bijschrift-2");
     });
   });
 });

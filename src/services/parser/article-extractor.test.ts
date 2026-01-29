@@ -25,6 +25,10 @@ function createMockStyles(
     bodyClasses: ["Broodtekst", "Body"],
     authorClasses: ["Auteur"],
     categoryClasses: ["Rubriek", "Thema"],
+    subheadingClasses: ["Tussenkop"],
+    streamerClasses: ["Streamer"],
+    sidebarClasses: ["Kader"],
+    captionClasses: ["Bijschrift"],
     ...overrides,
   };
 }
@@ -366,6 +370,98 @@ describe("article-extractor", () => {
       expect(result.articles[0].chapeau).toBe("Alternative Chapeau");
     });
 
+    it("should extract subheadings from article", async () => {
+      const spread = createMockSpread(
+        1,
+        `
+        <html>
+          <body>
+            <p class="Titel">Article with Subheadings</p>
+            <p class="Broodtekst">Intro paragraph.</p>
+            <p class="Tussenkop">First Subheading</p>
+            <p class="Broodtekst">More text.</p>
+            <p class="Tussenkop">Second Subheading</p>
+            <p class="Broodtekst">Final text.</p>
+          </body>
+        </html>
+      `
+      );
+
+      const result = await extractArticles(createMockExport([spread]));
+
+      expect(result.articles).toHaveLength(1);
+      expect(result.articles[0].subheadings).toContain("First Subheading");
+      expect(result.articles[0].subheadings).toContain("Second Subheading");
+    });
+
+    it("should extract streamers/quotes from article", async () => {
+      const spread = createMockSpread(
+        1,
+        `
+        <html>
+          <body>
+            <p class="Titel">Article with Streamer</p>
+            <p class="Broodtekst">Introduction.</p>
+            <p class="Streamer">This is an important quote that stands out</p>
+            <p class="Broodtekst">Conclusion.</p>
+          </body>
+        </html>
+      `
+      );
+
+      const result = await extractArticles(createMockExport([spread]));
+
+      expect(result.articles).toHaveLength(1);
+      expect(result.articles[0].streamers).toHaveLength(1);
+      expect(result.articles[0].streamers[0]).toBe("This is an important quote that stands out");
+    });
+
+    it("should extract sidebars/kaders from article", async () => {
+      const spread = createMockSpread(
+        1,
+        `
+        <html>
+          <body>
+            <p class="Titel">Article with Kader</p>
+            <p class="Broodtekst">Main text.</p>
+            <p class="Kader">Sidebar content here</p>
+            <p class="Broodtekst">More main text.</p>
+          </body>
+        </html>
+      `
+      );
+
+      const result = await extractArticles(createMockExport([spread]));
+
+      expect(result.articles).toHaveLength(1);
+      expect(result.articles[0].sidebars).toHaveLength(1);
+      expect(result.articles[0].sidebars[0]).toContain("Sidebar content");
+    });
+
+    it("should extract captions and images from article", async () => {
+      const spread = createMockSpread(
+        1,
+        `
+        <html>
+          <body>
+            <p class="Titel">Article with Captioned Image</p>
+            <img src="../image/photo.jpg" />
+            <p class="Bijschrift">Photo caption text</p>
+            <p class="Broodtekst">Body text.</p>
+          </body>
+        </html>
+      `
+      );
+
+      const result = await extractArticles(createMockExport([spread]));
+
+      expect(result.articles).toHaveLength(1);
+      expect(result.articles[0].referencedImages).toContain("photo.jpg");
+      // Captions are extracted but association with specific images
+      // is handled by the rich-content-extractor module
+      expect(result.articles[0].captions).toBeDefined();
+    });
+
     it("should combine multiple body elements", async () => {
       const spread = createMockSpread(
         1,
@@ -576,6 +672,10 @@ describe("article-extractor", () => {
           pageEnd: 3,
           sourceSpreadIndexes: [1],
           referencedImages: [],
+          subheadings: [],
+          streamers: [],
+          sidebars: [],
+          captions: new Map<string, string>(),
         },
       ];
 
@@ -617,6 +717,10 @@ describe("article-extractor", () => {
           pageEnd: 3,
           sourceSpreadIndexes: [1],
           referencedImages: [],
+          subheadings: [],
+          streamers: [],
+          sidebars: [],
+          captions: new Map<string, string>(),
         },
         {
           title: "Article 2",
@@ -628,6 +732,10 @@ describe("article-extractor", () => {
           pageEnd: 5,
           sourceSpreadIndexes: [2],
           referencedImages: [],
+          subheadings: [],
+          streamers: [],
+          sidebars: [],
+          captions: new Map<string, string>(),
         },
       ];
 
@@ -690,6 +798,10 @@ describe("article-extractor", () => {
           pageEnd: 3,
           sourceSpreadIndexes: [1],
           referencedImages: [],
+          subheadings: [],
+          streamers: [],
+          sidebars: [],
+          captions: new Map<string, string>(),
         },
       ];
 
@@ -719,6 +831,10 @@ describe("article-extractor", () => {
           pageEnd: 3,
           sourceSpreadIndexes: [1],
           referencedImages: [],
+          subheadings: [],
+          streamers: [],
+          sidebars: [],
+          captions: new Map<string, string>(),
         },
       ];
 

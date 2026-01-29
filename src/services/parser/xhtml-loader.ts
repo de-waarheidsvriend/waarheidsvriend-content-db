@@ -228,6 +228,10 @@ export async function loadXhtmlExport(xhtmlDir: string): Promise<XhtmlExport> {
         bodyClasses: [],
         authorClasses: [],
         categoryClasses: [],
+        subheadingClasses: [],
+        streamerClasses: [],
+        sidebarClasses: [],
+        captionClasses: [],
       },
       metadata: { editionNumber: null, editionDate: null },
       errors,
@@ -279,6 +283,10 @@ export async function loadXhtmlExport(xhtmlDir: string): Promise<XhtmlExport> {
     bodyClasses: [] as string[],
     authorClasses: [] as string[],
     categoryClasses: [] as string[],
+    subheadingClasses: [] as string[],
+    streamerClasses: [] as string[],
+    sidebarClasses: [] as string[],
+    captionClasses: [] as string[],
   };
   if (resourcesDir) {
     const cssDir = join(resourcesDir, "css");

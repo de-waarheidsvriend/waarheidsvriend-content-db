@@ -67,6 +67,14 @@ export interface StyleAnalysis {
   authorClasses: string[];
   /** Classes that indicate category/rubric */
   categoryClasses: string[];
+  /** Classes that indicate subheadings/tussenkoppen */
+  subheadingClasses: string[];
+  /** Classes that indicate streamers/quotes */
+  streamerClasses: string[];
+  /** Classes that indicate sidebars/kaders */
+  sidebarClasses: string[];
+  /** Classes that indicate captions/bijschriften */
+  captionClasses: string[];
 }
 
 /**
@@ -109,13 +117,21 @@ export interface ExtractedArticle {
   sourceSpreadIndexes: number[];
   /** Images referenced in this article (filenames) */
   referencedImages: string[];
+  /** Subheadings/tussenkoppen extracted (plain text) */
+  subheadings: string[];
+  /** Streamers/quotes extracted (plain text) */
+  streamers: string[];
+  /** Sidebar/kader content blocks (cleaned HTML) */
+  sidebars: string[];
+  /** Image captions extracted (plain text), indexed by image filename */
+  captions: Map<string, string>;
 }
 
 /**
  * Intermediate element during parsing
  */
 export interface ArticleElement {
-  type: "title" | "chapeau" | "body" | "author" | "category" | "image" | "unknown";
+  type: "title" | "chapeau" | "body" | "author" | "category" | "image" | "subheading" | "streamer" | "sidebar" | "caption" | "unknown";
   content: string;
   className: string;
   spreadIndex: number;
@@ -150,5 +166,65 @@ export interface ExtractedAuthor {
  */
 export interface AuthorExtractionResult {
   authors: ExtractedAuthor[];
+  errors: string[];
+}
+
+/**
+ * Rich content block types for structured content extraction
+ */
+export type ContentBlockType = "paragraph" | "subheading" | "image" | "quote" | "sidebar";
+
+/**
+ * A content block with typed content
+ */
+export interface ContentBlock {
+  type: ContentBlockType;
+  content: string;
+  /** For image blocks: the image URL */
+  imageUrl?: string;
+  /** For image blocks: the caption */
+  caption?: string;
+  /** Sort order within the article */
+  order: number;
+}
+
+/**
+ * Extracted image with metadata
+ */
+export interface ExtractedImage {
+  /** Source filename in XHTML export */
+  filename: string;
+  /** Relative path from XHTML root */
+  sourcePath: string;
+  /** Caption if found */
+  caption: string | null;
+  /** Whether this is the featured/main image */
+  isFeatured: boolean;
+  /** Sort order (0 = first/featured) */
+  sortOrder: number;
+  /** Article title this image belongs to (for mapping) */
+  articleTitle: string;
+}
+
+/**
+ * Result of image mapping
+ */
+export interface ImageMappingResult {
+  images: ExtractedImage[];
+  errors: string[];
+}
+
+/**
+ * Rich content extraction result
+ */
+export interface RichContentResult {
+  /** Subheadings extracted from article */
+  subheadings: string[];
+  /** Streamers/quotes extracted */
+  streamers: string[];
+  /** Sidebar/kader blocks extracted */
+  sidebars: ContentBlock[];
+  /** Structured content blocks in order */
+  contentBlocks: ContentBlock[];
   errors: string[];
 }
