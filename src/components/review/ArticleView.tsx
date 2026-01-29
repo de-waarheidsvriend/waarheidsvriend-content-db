@@ -1,9 +1,34 @@
 "use client";
 
 import Image from "next/image";
+import DOMPurify from "isomorphic-dompurify";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useArticle, type ArticleDetail, type ArticleAuthor, type ArticleImage } from "@/hooks/useArticles";
+
+/**
+ * Sanitize HTML content to prevent XSS attacks
+ * Allows common formatting tags while stripping potentially dangerous content
+ */
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      "p", "br", "strong", "b", "em", "i", "u", "s", "strike",
+      "h1", "h2", "h3", "h4", "h5", "h6",
+      "ul", "ol", "li",
+      "blockquote", "pre", "code",
+      "a", "img",
+      "table", "thead", "tbody", "tr", "th", "td",
+      "figure", "figcaption",
+      "div", "span", "aside"
+    ],
+    ALLOWED_ATTR: [
+      "href", "src", "alt", "title", "class", "id",
+      "target", "rel", "width", "height"
+    ],
+    ALLOW_DATA_ATTR: false,
+  });
+}
 
 /**
  * Author display with optional photo
@@ -221,10 +246,10 @@ export function ArticleView({ articleId }: ArticleViewProps) {
           </div>
         )}
 
-        {/* Body content (rendered HTML) */}
+        {/* Body content (rendered HTML) - sanitized to prevent XSS */}
         <div
           className="prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: article.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content) }}
         />
 
         {/* Image gallery (FR29) */}

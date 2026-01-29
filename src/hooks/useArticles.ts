@@ -67,7 +67,12 @@ async function fetchArticle(id: number): Promise<ArticleDetail> {
 export function useArticle(id: number | null) {
   return useQuery({
     queryKey: ["article", id],
-    queryFn: () => fetchArticle(id!),
+    queryFn: () => {
+      if (id === null) {
+        throw new Error("Article ID is required");
+      }
+      return fetchArticle(id);
+    },
     enabled: id !== null,
   });
 }

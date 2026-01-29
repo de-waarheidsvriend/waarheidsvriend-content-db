@@ -53,8 +53,7 @@ export function extractRichContent(
 
         const richContent = extractRichContentFromSpread(
           spread,
-          xhtmlExport.styles,
-          article.title
+          xhtmlExport.styles
         );
 
         allSubheadings.push(...richContent.subheadings);
@@ -91,8 +90,7 @@ export function extractRichContent(
  */
 function extractRichContentFromSpread(
   spread: LoadedSpread,
-  styles: StyleAnalysis,
-  _articleTitle: string
+  styles: StyleAnalysis
 ): RichContentResult {
   const subheadings: string[] = [];
   const streamers: string[] = [];
@@ -589,8 +587,7 @@ function findImageSourcePath(xhtmlRootDir: string, relativePath: string): string
  * @returns Array of content blocks in order
  */
 export function buildContentBlocks(
-  article: ExtractedArticle,
-  _xhtmlExport: XhtmlExport
+  article: ExtractedArticle
 ): ContentBlock[] {
   const blocks: ContentBlock[] = [];
   let order = 0;

@@ -832,7 +832,7 @@ describe("rich-content-extractor", () => {
         content: "<p>First paragraph</p><p>Second paragraph</p>",
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(2);
       expect(result[0].type).toBe("paragraph");
@@ -846,7 +846,7 @@ describe("rich-content-extractor", () => {
         content: "<h2>Heading 2</h2><h3>Heading 3</h3>",
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(2);
       expect(result[0].type).toBe("subheading");
@@ -860,7 +860,7 @@ describe("rich-content-extractor", () => {
         content: "<blockquote>A great quote</blockquote>",
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe("quote");
@@ -872,7 +872,7 @@ describe("rich-content-extractor", () => {
         content: "<aside><p>Sidebar info</p></aside>",
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe("sidebar");
@@ -887,7 +887,7 @@ describe("rich-content-extractor", () => {
         `,
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       const types = result.map((b) => b.type);
       expect(types).toContain("subheading");
@@ -905,7 +905,7 @@ describe("rich-content-extractor", () => {
         `,
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(4);
       expect(result[0].order).toBe(0);
@@ -919,7 +919,7 @@ describe("rich-content-extractor", () => {
         content: '<img src="/path/to/image.jpg" alt="Alt text" />',
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe("image");
@@ -932,7 +932,7 @@ describe("rich-content-extractor", () => {
         content: "<p></p><p>   </p><p>Valid content</p>",
       });
 
-      const result = buildContentBlocks(article, createMockExport([]));
+      const result = buildContentBlocks(article);
 
       expect(result).toHaveLength(1);
       expect(result[0].content).toBe("Valid content");
