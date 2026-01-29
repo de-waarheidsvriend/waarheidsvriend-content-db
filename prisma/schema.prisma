@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// Edition Model - Edities met metadata (FR35)
+// ============================================================================
+model Edition {
+  id             Int         @id @default(autoincrement())
+  edition_number Int         @unique
+  edition_date   DateTime
+  status         String      @default("pending")
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  // Relations
+  articles       Article[]
+  page_images    PageImage[]
+
+  @@map("editions")
+}
+
+// ============================================================================
+// Article Model - Artikelen gekoppeld aan editie (FR36)
+// ============================================================================
+model Article {
+  id         Int      @id @default(autoincrement())
+  edition_id Int
+  title      String
+  chapeau    String?
+  content    String
+  excerpt    String?
+  category   String?
+  page_start Int?
+  page_end   Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  edition         Edition         @relation(fields: [edition_id], references: [id], onDelete: Cascade)
+  images          Image[]
+  article_authors ArticleAuthor[]
+
+  @@map("articles")
+}
+
+// ============================================================================
+// Author Model - Auteurs met profielen (FR37)
+// ============================================================================
+model Author {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  photo_url  String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  article_authors ArticleAuthor[]
+
+  @@map("authors")
+}
+
+// ============================================================================
+// ArticleAuthor Model - Artikel-auteur relaties (FR38)
+// ============================================================================
+model ArticleAuthor {
+  article_id Int
+  author_id  Int
+
+  // Relations
+  article Article @relation(fields: [article_id], references: [id], onDelete: Cascade)
+  author  Author  @relation(fields: [author_id], references: [id], onDelete: Cascade)
+
+  @@id([article_id, author_id])
+  @@map("article_authors")
+}
+
+// ============================================================================
+// Image Model - Afbeeldingen met metadata (FR39)
+// ============================================================================
+model Image {
+  id          Int      @id @default(autoincrement())
+  article_id  Int
+  url         String
+  caption     String?
+  is_featured Boolean  @default(false)
+  sort_order  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  article Article @relation(fields: [article_id], references: [id], onDelete: Cascade)
+
+  @@map("images")
+}
+
+// ============================================================================
+// PageImage Model - Pagina-afbeeldingen per editie (FR40)
+// ============================================================================
+model PageImage {
+  id          Int      @id @default(autoincrement())
+  edition_id  Int
+  page_number Int
+  image_url   String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  edition Edition @relation(fields: [edition_id], references: [id], onDelete: Cascade)
+
+  @@unique([edition_id, page_number])
+  @@map("page_images")
+}
