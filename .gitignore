@@ -27,6 +27,8 @@
 
 # large sample files
 docs/*.pdf
+docs/*.zip
+docs/single-page-export/
 
 # debug
 npm-debug.log*
