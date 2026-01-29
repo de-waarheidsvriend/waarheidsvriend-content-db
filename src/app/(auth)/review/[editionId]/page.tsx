@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState, useCallback, useMemo } from "react";
+import { use, useState, useCallback, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SplitView } from "@/components/review/SplitView";
@@ -45,6 +46,9 @@ function ReviewContent({
   articles: ArticleSummary[];
   initialArticleId?: number;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   // Find initial index based on article ID from URL or default to 0
   const initialIndex = useMemo(() => {
     if (initialArticleId) {
@@ -57,6 +61,14 @@ function ReviewContent({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
   const currentArticle = articles[currentIndex];
+
+  // Update URL when article changes (without triggering navigation)
+  useEffect(() => {
+    if (currentArticle) {
+      const newUrl = `${pathname}?article=${currentArticle.id}`;
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [currentArticle, pathname, router]);
 
   const handlePrevious = useCallback(() => {
     setCurrentIndex((i) => Math.max(0, i - 1));

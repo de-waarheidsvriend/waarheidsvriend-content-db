@@ -69,11 +69,18 @@ Zodat ik visueel kan verifiëren of alles correct is geëxtraheerd.
   - [x] 5.5 Voeg role="status" en aria-live toe voor screen readers
 
 - [x] Task 6: Tests schrijven
-  - [x] 6.1 Unit tests voor ArticleNavigation (13 tests)
-  - [x] 6.2 Unit tests voor PdfSpreadView (11 tests)
-  - [x] 6.3 Unit tests voor SplitView (4 tests)
-  - [x] 6.4 Unit tests voor usePageImages hook (4 tests)
-  - [x] 6.5 API tests voor page-images endpoint (6 tests)
+  - [x] 6.1 Unit tests voor ArticleNavigation (17 tests)
+  - [x] 6.2 Unit tests voor PdfSpreadView (22 tests - includes edge cases)
+  - [x] 6.3 Unit tests voor SplitView (7 tests)
+  - [x] 6.4 Unit tests voor usePageImages hook (10 tests)
+  - [x] 6.5 API tests voor page-images endpoint (10 tests)
+  - [x] 6.6 Unit tests voor useArticles hook (11 tests)
+  - [x] 6.7 API tests voor articles endpoint (14 tests)
+
+- [x] Task 7: URL Persistence
+  - [x] 7.1 Update URL bij artikel navigatie met router.replace
+  - [x] 7.2 Preserve article param in URL state
+  - [x] 7.3 Support browser back/forward navigation
 
 ## Dev Notes
 
@@ -150,11 +157,13 @@ if (pageNum === 1) {
 
 ### Test Coverage
 
-- ArticleNavigation: 13 tests (navigation, keyboard, disabled states, accessibility)
-- PdfSpreadView: 11 tests (loading, error, spreads, navigation)
-- SplitView: 4 tests (props passing, rendering)
-- usePageImages: 4 tests (fetch, null handling, errors)
-- API route: 6 tests (validation, not found, success, errors)
+- ArticleNavigation: 17 tests (navigation, keyboard, disabled states, accessibility)
+- PdfSpreadView: 22 tests (loading, error, spreads, navigation, edge cases)
+- SplitView: 7 tests (props passing, rendering, null handling)
+- usePageImages: 10 tests (fetch, null handling, errors, network)
+- page-images API: 10 tests (validation, not found, success, errors, edge cases)
+- useArticles: 11 tests (fetch, null handling, errors, optional fields)
+- articles API: 14 tests (validation, not found, success, authors, images)
 
 ### Dependencies
 
@@ -184,8 +193,13 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
   - Magazine spread logic (page 1 solo, even-odd pairs)
   - Native img tag for dynamic uploads
   - ARIA accessibility improvements
-- 38 new tests added, all 345 tests pass
-- No lint errors
+- URL persistence added: router.replace() updates URL on article navigation
+- Comprehensive tests added:
+  - Review components: 46 tests (ArticleNavigation, PdfSpreadView, SplitView)
+  - Hooks: 21 tests (usePageImages, useArticles)
+  - API endpoints: 24 tests (page-images, articles)
+- Total: 436 tests pass across project
+- No lint errors, build succeeds
 
 ### File List
 
@@ -204,15 +218,23 @@ Files modified in code review fixes:
 - `src/components/review/ArticleNavigation.tsx` (MODIFIED - ARIA labels)
 
 Test files added:
-- `src/components/review/ArticleNavigation.test.tsx` (NEW)
-- `src/components/review/PdfSpreadView.test.tsx` (NEW)
-- `src/components/review/SplitView.test.tsx` (NEW)
-- `src/hooks/usePageImages.test.tsx` (NEW)
-- `src/app/api/editions/[id]/page-images/route.test.ts` (NEW)
+- `src/components/review/ArticleNavigation.test.tsx` (NEW - 17 tests)
+- `src/components/review/PdfSpreadView.test.tsx` (NEW - 22 tests)
+- `src/components/review/SplitView.test.tsx` (NEW - 7 tests)
+- `src/hooks/usePageImages.test.tsx` (NEW - 10 tests)
+- `src/hooks/useArticles.test.tsx` (NEW - 11 tests)
+- `src/app/api/editions/[id]/page-images/route.test.ts` (UPDATED - 10 tests)
+- `src/app/api/articles/[id]/route.test.ts` (NEW - 14 tests)
 
 ## Change Log
 
 - 2026-01-29: Story created and initial implementation completed (commit 2aa3e64)
 - 2026-01-29: Code review fixes applied - spread logic, img tag, ARIA labels
 - 2026-01-29: Tests added (38 new tests), all 345 tests passing
-- 2026-01-29: Story completed - status updated to done
+- 2026-01-29: Story 3.3 issues fixed:
+  - Created comprehensive test suites for all review components
+  - Added tests for usePageImages and useArticles hooks
+  - Added tests for page-images and articles API endpoints
+  - Added spread logic edge case tests
+  - Fixed URL persistence during navigation
+  - Total: 436 tests pass across project

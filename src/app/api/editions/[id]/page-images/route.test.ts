@@ -102,4 +102,67 @@ describe('GET /api/editions/[id]/page-images', () => {
       orderBy: { page_number: 'asc' },
     });
   });
+
+  it('should return empty array when edition has no page images', async () => {
+    mockFindUnique.mockResolvedValue({ id: 1 });
+    mockFindMany.mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost/api/editions/1/page-images');
+    const response = await GET(request, { params: Promise.resolve({ id: '1' }) });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data).toEqual([]);
+  });
+
+  it('should return 400 for zero edition ID', async () => {
+    const request = new NextRequest('http://localhost/api/editions/0/page-images');
+    const response = await GET(request, { params: Promise.resolve({ id: '0' }) });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('should transform database model to API response format correctly', async () => {
+    mockFindUnique.mockResolvedValue({ id: 1 });
+    mockFindMany.mockResolvedValue([
+      { id: 10, page_number: 5, image_url: '/uploads/test.png', edition_id: 1 },
+    ]);
+
+    const request = new NextRequest('http://localhost/api/editions/1/page-images');
+    const response = await GET(request, { params: Promise.resolve({ id: '1' }) });
+    const body = await response.json();
+
+    expect(body.data[0]).toEqual({
+      id: 10,
+      pageNumber: 5,
+      imageUrl: '/uploads/test.png',
+    });
+    // Ensure snake_case fields are not exposed
+    expect(body.data[0]).not.toHaveProperty('edition_id');
+    expect(body.data[0]).not.toHaveProperty('page_number');
+    expect(body.data[0]).not.toHaveProperty('image_url');
+  });
+
+  it('should handle multiple page images', async () => {
+    mockFindUnique.mockResolvedValue({ id: 1 });
+    mockFindMany.mockResolvedValue([
+      { id: 1, page_number: 1, image_url: '/page-1.png' },
+      { id: 2, page_number: 2, image_url: '/page-2.png' },
+      { id: 3, page_number: 3, image_url: '/page-3.png' },
+      { id: 4, page_number: 4, image_url: '/page-4.png' },
+      { id: 5, page_number: 5, image_url: '/page-5.png' },
+    ]);
+
+    const request = new NextRequest('http://localhost/api/editions/1/page-images');
+    const response = await GET(request, { params: Promise.resolve({ id: '1' }) });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data).toHaveLength(5);
+    expect(body.data[4].pageNumber).toBe(5);
+  });
 });
