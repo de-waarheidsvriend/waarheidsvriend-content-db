@@ -74,7 +74,7 @@ export function ArticleList({ editionId }: ArticleListProps) {
   return (
     <div className="grid gap-3">
       {edition.articles.map((article) => (
-        <ArticleCard key={article.id} article={article} />
+        <ArticleCard key={article.id} article={article} editionId={editionId} />
       ))}
     </div>
   );
