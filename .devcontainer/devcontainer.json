@@ -1,7 +1,7 @@
 {
   "name": "Waarheidsvriend Content DB",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "[ -f package.json ] && npm install || echo 'No package.json yet'",
   "customizations": {
     "vscode": {
       "extensions": [
