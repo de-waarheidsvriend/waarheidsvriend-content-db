@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { mkdir, readdir, access, rm } from "fs/promises";
-import { join, resolve, relative } from "path";
+import { join, resolve } from "path";
 
 const execFileAsync = promisify(execFile);
 
@@ -196,7 +196,7 @@ export async function cleanupGeneratedImages(pagesDir: string): Promise<void> {
   try {
     await rm(pagesDir, { recursive: true, force: true });
     console.log(`[PDF Converter] Cleaned up directory: ${pagesDir}`);
-  } catch (error) {
+  } catch {
     console.error("[PDF Converter] Failed to cleanup images directory");
   }
 }
