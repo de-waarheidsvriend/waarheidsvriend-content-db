@@ -47,9 +47,15 @@ function validatePath(inputPath: string): { valid: boolean; error?: string } {
 /**
  * Parse page information from HTML filename
  *
- * Single-page export mapping:
+ * Single-page export mapping (1 HTML file = 1 page):
  * - publication.html → page 1 (cover)
  * - publication-N.html → page N+1
+ *
+ * Examples:
+ * - publication.html = page 1 (cover)
+ * - publication-1.html = page 2
+ * - publication-2.html = page 3
+ * - publication-3.html = page 4
  */
 export function parseSpreadFromFilename(filename: string): SpreadInfo {
   const baseName = basename(filename, ".html");
@@ -64,16 +70,16 @@ export function parseSpreadFromFilename(filename: string): SpreadInfo {
     };
   }
 
-  // publication-N pattern: N+1 is the page number
+  // publication-N pattern: page N+1
   const match = baseName.match(/^publication-(\d+)$/);
   if (match) {
     const fileIndex = parseInt(match[1]);
     const pageNumber = fileIndex + 1; // publication-1.html = page 2
     return {
       filename,
-      spreadIndex: fileIndex, // Keep for ordering/grouping
+      spreadIndex: fileIndex,
       pageStart: pageNumber,
-      pageEnd: pageNumber, // Single page, not spread!
+      pageEnd: pageNumber,
     };
   }
 

@@ -31,6 +31,7 @@ export interface ArticleDetail {
   content: string;
   excerpt: string | null;
   category: string | null;
+  authorBio: string | null;
   pageStart: number | null;
   pageEnd: number | null;
   editionId: number;

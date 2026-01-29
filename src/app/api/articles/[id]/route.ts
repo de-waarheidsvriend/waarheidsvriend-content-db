@@ -13,6 +13,7 @@ interface ArticleDetailResponse {
     content: string;
     excerpt: string | null;
     category: string | null;
+    authorBio: string | null;
     pageStart: number | null;
     pageEnd: number | null;
     editionId: number;
@@ -106,6 +107,7 @@ export async function GET(
       content: article.content,
       excerpt: article.excerpt,
       category: article.category,
+      authorBio: article.author_bio,
       pageStart: article.page_start,
       pageEnd: article.page_end,
       editionId: article.edition.id,

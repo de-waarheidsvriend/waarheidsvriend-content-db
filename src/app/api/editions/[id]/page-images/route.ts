@@ -62,7 +62,7 @@ export async function GET(
     const data: PageImage[] = pageImages.map((img) => ({
       id: img.id,
       pageNumber: img.page_number,
-      imageUrl: img.image_url,
+      imageUrl: `/uploads/${img.image_url}`,
     }));
 
     return NextResponse.json<PageImagesResponse>({ success: true, data });

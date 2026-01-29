@@ -224,10 +224,18 @@ export function ArticleView({ articleId }: ArticleViewProps) {
 
         {/* Authors */}
         {article.authors.length > 0 && (
-          <div className="flex flex-wrap gap-4">
-            {article.authors.map((author) => (
-              <AuthorDisplay key={author.id} author={author} />
-            ))}
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-4">
+              {article.authors.map((author) => (
+                <AuthorDisplay key={author.id} author={author} />
+              ))}
+            </div>
+            {/* Author bio - description of the author in context of this article */}
+            {article.authorBio && (
+              <p className="text-sm text-muted-foreground italic pl-13">
+                {article.authorBio}
+              </p>
+            )}
           </div>
         )}
 
