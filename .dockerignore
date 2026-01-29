@@ -1,0 +1,34 @@
+# Dependencies (will be installed in container)
+node_modules
+
+# Git
+.git
+.gitignore
+
+# Environment files (loaded via env_file in docker-compose)
+.env
+.env.local
+.env*.local
+
+# Build output
+.next
+out
+build
+
+# IDE and editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# BMAD workflow files (not needed in container)
+_bmad/
+_bmad-output/
+
+# Uploads (mounted as volume)
+uploads/
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
