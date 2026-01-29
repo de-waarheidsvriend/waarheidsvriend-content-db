@@ -1,5 +1,5 @@
 import { copyFile, mkdir } from "fs/promises";
-import { join, basename } from "path";
+import { join } from "path";
 import type { PrismaClient, Image } from "@prisma/client";
 import type {
   ExtractedArticle,

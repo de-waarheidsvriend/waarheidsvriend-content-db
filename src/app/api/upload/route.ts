@@ -4,6 +4,7 @@ import { join } from "path";
 import AdmZip from "adm-zip";
 import { prisma } from "@/lib/db";
 import { extractMetadata } from "@/services/parser/metadata-extractor";
+import { processEdition } from "@/services/parser";
 
 // Temporary edition number range (negative to avoid collision with real editions)
 const TEMP_EDITION_NUMBER_MAX = 2_000_000_000;
@@ -150,6 +151,23 @@ export async function POST(
           },
         });
       }
+
+      // Start automatic processing (FR3)
+      // Run asynchronously to not block the upload response
+      const uploadsDir = join(process.cwd(), "uploads");
+      processEdition(edition.id, editionDir, uploadsDir)
+        .then((result) => {
+          console.log(
+            `[Upload API] Processing completed for edition ${edition.id}: ${result.status}`,
+            { stats: result.stats, errorsCount: result.errors.length }
+          );
+        })
+        .catch((error) => {
+          console.error(
+            `[Upload API] Processing failed for edition ${edition.id}:`,
+            error
+          );
+        });
 
       return NextResponse.json<UploadSuccessResponse>({
         success: true,

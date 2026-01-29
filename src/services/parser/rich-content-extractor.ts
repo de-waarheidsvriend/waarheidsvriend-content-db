@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { copyFile, mkdir } from "fs/promises";
-import { join, basename, dirname } from "path";
+import { join, basename } from "path";
 import type { PrismaClient, Image } from "@prisma/client";
 import type {
   XhtmlExport,
@@ -12,7 +12,7 @@ import type {
   StyleAnalysis,
   LoadedSpread,
 } from "@/types";
-import { cleanHtml, htmlToPlainText } from "./html-cleaner";
+import { cleanHtml } from "./html-cleaner";
 
 /**
  * Extract rich content (images, quotes, sidebars) from articles
@@ -92,7 +92,7 @@ export function extractRichContent(
 function extractRichContentFromSpread(
   spread: LoadedSpread,
   styles: StyleAnalysis,
-  articleTitle: string
+  _articleTitle: string
 ): RichContentResult {
   const subheadings: string[] = [];
   const streamers: string[] = [];
@@ -106,7 +106,8 @@ function extractRichContentFromSpread(
   const subheadingSelector = styles.subheadingClasses.map((c) => `.${c}`).join(", ");
   const streamerSelector = styles.streamerClasses.map((c) => `.${c}`).join(", ");
   const sidebarSelector = styles.sidebarClasses.map((c) => `.${c}`).join(", ");
-  const captionSelector = styles.captionClasses.map((c) => `.${c}`).join(", ");
+  // Caption selector prepared for future use
+  void styles.captionClasses;
 
   // Extract subheadings (FR20)
   if (subheadingSelector) {
@@ -270,7 +271,7 @@ function extractCaptionsFromSpreads(
 
       // Look for caption near the image
       // Strategy 1: Check parent's next sibling
-      let caption = findNearbyCaption($, $img, captionSelector);
+      const caption = findNearbyCaption($, $img, captionSelector);
 
       if (caption) {
         captions.set(filename, caption);
@@ -589,7 +590,7 @@ function findImageSourcePath(xhtmlRootDir: string, relativePath: string): string
  */
 export function buildContentBlocks(
   article: ExtractedArticle,
-  xhtmlExport: XhtmlExport
+  _xhtmlExport: XhtmlExport
 ): ContentBlock[] {
   const blocks: ContentBlock[] = [];
   let order = 0;
