@@ -1,8 +1,9 @@
 FROM node:20-bookworm-slim
 
-# Install Poppler for PDF processing (pdftoppm for Story 2.2)
+# Install Poppler for PDF processing and OpenSSL for Prisma
 RUN apt-get update && apt-get install -y \
     poppler-utils \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
