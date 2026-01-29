@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { copyFile, mkdir } from "fs/promises";
+import { copyFile, mkdir, readdir, stat } from "fs/promises";
 import { join, basename } from "path";
 import type { PrismaClient, Image } from "@prisma/client";
 import type {
@@ -523,7 +523,7 @@ export async function saveImages(
       let imageUrl: string | null = null;
       try {
         // Find the actual source path in the XHTML export
-        const sourcePath = findImageSourcePath(xhtmlRootDir, extractedImage.sourcePath);
+        const sourcePath = await findImageSourcePathAsync(xhtmlRootDir, extractedImage.sourcePath);
         const destFilename = extractedImage.filename;
         const destPath = join(articleImagesDir, destFilename);
 
@@ -569,13 +569,55 @@ export async function saveImages(
 
 /**
  * Find the actual source path for an image in the XHTML export
+ * Handles nested directories from ZIP extraction
  */
-function findImageSourcePath(xhtmlRootDir: string, relativePath: string): string {
+async function findImageSourcePathAsync(xhtmlRootDir: string, relativePath: string): Promise<string> {
+  const filename = basename(relativePath);
+
   // Try direct path first
   const directPath = join(xhtmlRootDir, relativePath);
+  try {
+    await stat(directPath);
+    return directPath;
+  } catch {
+    // Direct path doesn't exist, search in nested folders
+  }
 
-  // Also try with nested content folder (from ZIP extraction)
-  // The structure might be: xhtmlRootDir/[content-folder]/publication-web-resources/image/...
+  // Search for the image in nested content folders
+  // Structure might be: xhtmlRootDir/[content-folder]/publication-web-resources/image/...
+  try {
+    const entries = await readdir(xhtmlRootDir, { withFileTypes: true });
+    console.log(`[Rich Content Extractor] Searching for ${filename} in ${entries.length} entries under ${xhtmlRootDir}`);
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('__')) {
+        // Check if the image exists in this nested folder
+        const nestedPath = join(xhtmlRootDir, entry.name, relativePath);
+        try {
+          await stat(nestedPath);
+          console.log(`[Rich Content Extractor] Found image at nested path: ${nestedPath}`);
+          return nestedPath;
+        } catch {
+          // Not found here, continue searching
+        }
+
+        // Also try publication-web-resources/image directly
+        const imagePath = join(xhtmlRootDir, entry.name, 'publication-web-resources', 'image', filename);
+        try {
+          await stat(imagePath);
+          console.log(`[Rich Content Extractor] Found image at: ${imagePath}`);
+          return imagePath;
+        } catch {
+          // Not found here either
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`[Rich Content Extractor] Error searching for image: ${error}`);
+  }
+
+  // Fall back to direct path (will fail at copy, but preserves original behavior)
+  console.warn(`[Rich Content Extractor] Image not found in nested folders, falling back to: ${directPath}`);
   return directPath;
 }
 
