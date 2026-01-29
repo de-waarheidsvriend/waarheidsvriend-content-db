@@ -14,13 +14,16 @@ COPY package*.json ./
 RUN npm install
 
 # Copy source code
-# In development: overwritten by volume mount in docker-compose.yml
-# In production: this provides the application code
 COPY . .
 
-# Expose the Next.js development port
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the application
+RUN npm run build
+
+# Expose the Next.js port
 EXPOSE 3000
 
-# Start in development mode with hot-reload
-# Note: -H 0.0.0.0 is required to make the server accessible from outside the container
-CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0"]
+# Start in production mode
+CMD ["npm", "start"]
