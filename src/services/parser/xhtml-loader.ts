@@ -1,10 +1,13 @@
 import { readFile, readdir } from "fs/promises";
 import { join, basename, extname, resolve, relative } from "path";
+import * as cheerio from "cheerio";
 import type {
   XhtmlExport,
   LoadedSpread,
   SpreadInfo,
   ImageIndex,
+  StyleAnalysis,
+  CoverHeadline,
 } from "@/types";
 import { extractMetadata } from "./metadata-extractor";
 import {
@@ -42,17 +45,17 @@ function validatePath(inputPath: string): { valid: boolean; error?: string } {
 }
 
 /**
- * Parse spread information from HTML filename
+ * Parse page information from HTML filename
  *
- * Mapping:
- * - publication.html → spread 0, page 1 (cover)
- * - publication-N.html → spread N, pages N*2 and N*2+1
+ * Single-page export mapping:
+ * - publication.html → page 1 (cover)
+ * - publication-N.html → page N+1
  */
 export function parseSpreadFromFilename(filename: string): SpreadInfo {
   const baseName = basename(filename, ".html");
 
   if (baseName === "publication") {
-    // Cover page (spread 0)
+    // Cover page (page 1)
     return {
       filename,
       spreadIndex: 0,
@@ -61,15 +64,16 @@ export function parseSpreadFromFilename(filename: string): SpreadInfo {
     };
   }
 
-  // publication-N pattern
+  // publication-N pattern: N+1 is the page number
   const match = baseName.match(/^publication-(\d+)$/);
   if (match) {
-    const spreadIndex = parseInt(match[1]);
+    const fileIndex = parseInt(match[1]);
+    const pageNumber = fileIndex + 1; // publication-1.html = page 2
     return {
       filename,
-      spreadIndex,
-      pageStart: spreadIndex * 2,
-      pageEnd: spreadIndex * 2 + 1,
+      spreadIndex: fileIndex, // Keep for ordering/grouping
+      pageStart: pageNumber,
+      pageEnd: pageNumber, // Single page, not spread!
     };
   }
 
@@ -202,6 +206,87 @@ function emptyImageIndex(): ImageIndex {
 }
 
 /**
+ * Create an empty StyleAnalysis for error cases
+ */
+function emptyStyleAnalysis(): StyleAnalysis {
+  return {
+    classMap: new Map<string, string>(),
+    articleBoundaryClasses: [],
+    titleClasses: [],
+    chapeauClasses: [],
+    bodyClasses: [],
+    authorClasses: [],
+    categoryClasses: [],
+    subheadingClasses: [],
+    streamerClasses: [],
+    sidebarClasses: [],
+    captionClasses: [],
+    coverTitleClasses: [],
+    coverChapeauClasses: [],
+    introVerseClasses: [],
+    authorBioClasses: [],
+  };
+}
+
+/**
+ * Extract cover metadata from the cover spread (page 1)
+ *
+ * Cover content in InDesign exports uses Omslag_* classes and does not have
+ * the ■ article end marker. This function extracts cover headlines as
+ * edition-level metadata.
+ *
+ * @param coverSpread - The first spread (page 1, cover)
+ * @param styles - StyleAnalysis with coverTitleClasses and coverChapeauClasses
+ * @returns Array of CoverHeadline objects
+ */
+export function extractCoverMetadata(
+  coverSpread: LoadedSpread,
+  styles: StyleAnalysis
+): CoverHeadline[] {
+  const headlines: CoverHeadline[] = [];
+  const $ = cheerio.load(coverSpread.html);
+
+  // Build selectors for cover elements
+  const titleSelector = styles.coverTitleClasses.map((c) => `.${c}`).join(", ");
+  const chapeauSelector = styles.coverChapeauClasses.map((c) => `.${c}`).join(", ");
+
+  if (!titleSelector) {
+    console.log("[XHTML Loader] No cover title classes found, skipping cover extraction");
+    return headlines;
+  }
+
+  // Extract cover titles
+  $(titleSelector).each((_, el) => {
+    const title = $(el).text().trim();
+    if (!title) return;
+
+    const headline: CoverHeadline = { title };
+
+    // Look for associated chapeau/ankeiler nearby (next sibling or within same parent)
+    if (chapeauSelector) {
+      const $parent = $(el).parent();
+      const $sibling = $(el).next();
+
+      // Check next sibling first
+      if ($sibling.is(chapeauSelector)) {
+        headline.subtitle = $sibling.text().trim();
+      } else {
+        // Check for chapeau within same parent
+        const $chapeau = $parent.find(chapeauSelector).first();
+        if ($chapeau.length > 0) {
+          headline.subtitle = $chapeau.text().trim();
+        }
+      }
+    }
+
+    headlines.push(headline);
+  });
+
+  console.log(`[XHTML Loader] Extracted ${headlines.length} cover headlines`);
+  return headlines;
+}
+
+/**
  * Load and parse a complete XHTML export
  *
  * @param xhtmlDir - Root directory of the XHTML export
@@ -220,19 +305,7 @@ export async function loadXhtmlExport(xhtmlDir: string): Promise<XhtmlExport> {
       rootDir: xhtmlDir,
       spreads: [],
       images: emptyImageIndex(),
-      styles: {
-        classMap: new Map<string, string>(),
-        articleBoundaryClasses: [],
-        titleClasses: [],
-        chapeauClasses: [],
-        bodyClasses: [],
-        authorClasses: [],
-        categoryClasses: [],
-        subheadingClasses: [],
-        streamerClasses: [],
-        sidebarClasses: [],
-        captionClasses: [],
-      },
+      styles: emptyStyleAnalysis(),
       metadata: { editionNumber: null, editionDate: null },
       errors,
     };
@@ -275,19 +348,7 @@ export async function loadXhtmlExport(xhtmlDir: string): Promise<XhtmlExport> {
   }
 
   // 3. Analyze CSS styles and HTML classes
-  let styles = {
-    classMap: new Map<string, string>(),
-    articleBoundaryClasses: [] as string[],
-    titleClasses: [] as string[],
-    chapeauClasses: [] as string[],
-    bodyClasses: [] as string[],
-    authorClasses: [] as string[],
-    categoryClasses: [] as string[],
-    subheadingClasses: [] as string[],
-    streamerClasses: [] as string[],
-    sidebarClasses: [] as string[],
-    captionClasses: [] as string[],
-  };
+  let styles: StyleAnalysis = emptyStyleAnalysis();
   if (resourcesDir) {
     const cssDir = join(resourcesDir, "css");
     const htmlDir = join(resourcesDir, "html");

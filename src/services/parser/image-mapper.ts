@@ -49,24 +49,44 @@ export function mapImagesToArticles(
 
 /**
  * Extract images for a single article
+ *
+ * Filters out:
+ * - Decorative images (logos, icons)
+ * - Advertisements
+ * - Author photos (identified via DOM position in article extraction)
  */
 function extractImagesForArticle(
   article: ExtractedArticle,
   xhtmlExport: XhtmlExport
 ): ExtractedImage[] {
   const images: ExtractedImage[] = [];
-  const { referencedImages, captions } = article;
+  const { referencedImages, captions, authorPhotoFilenames } = article;
 
-  // Filter out decorative/logo images and advertisements
+  // Filter out decorative/logo images, advertisements, and author photos
   const contentImages = referencedImages.filter((filename) => {
     const lowerFilename = filename.toLowerCase();
-    return (
-      !lowerFilename.includes("logo") &&
-      !lowerFilename.includes("icon") &&
-      !lowerFilename.startsWith("adv_") &&
-      !lowerFilename.includes("advertentie") &&
-      !lowerFilename.startsWith("data:") // Skip inline base64 images
-    );
+
+    // Existing filters: decorative and advertisement images
+    if (
+      lowerFilename.includes("logo") ||
+      lowerFilename.includes("icon") ||
+      lowerFilename.startsWith("adv_") ||
+      lowerFilename.includes("advertentie") ||
+      lowerFilename.startsWith("data:")
+    ) {
+      return false;
+    }
+
+    // NEW: Skip images identified as author photos by DOM position
+    // authorPhotoFilenames is a Set populated during article extraction
+    if (authorPhotoFilenames && authorPhotoFilenames.has(filename)) {
+      console.log(
+        `[Image Mapper] Filtering out author photo: ${filename} for article "${article.title}"`
+      );
+      return false;
+    }
+
+    return true;
   });
 
   for (let i = 0; i < contentImages.length; i++) {

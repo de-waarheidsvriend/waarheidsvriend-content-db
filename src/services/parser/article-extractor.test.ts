@@ -29,6 +29,10 @@ function createMockStyles(
     streamerClasses: ["Streamer"],
     sidebarClasses: ["Kader"],
     captionClasses: ["Bijschrift"],
+    coverTitleClasses: [],
+    coverChapeauClasses: [],
+    introVerseClasses: [],
+    authorBioClasses: [],
     ...overrides,
   };
 }
@@ -658,25 +662,45 @@ describe("article-extractor", () => {
   });
 
   describe("saveArticles", () => {
+    // Helper to create mock articles for saveArticles tests
+    function createSaveArticle(title: string, options: Partial<{
+      chapeau: string | null;
+      content: string;
+      excerpt: string;
+      category: string | null;
+      pageStart: number;
+      pageEnd: number;
+    }> = {}) {
+      return {
+        title,
+        chapeau: options.chapeau ?? null,
+        content: options.content ?? "<p>Content</p>",
+        excerpt: options.excerpt ?? "Excerpt",
+        category: options.category ?? null,
+        authorBio: null,
+        pageStart: options.pageStart ?? 2,
+        pageEnd: options.pageEnd ?? 3,
+        sourceSpreadIndexes: [1],
+        referencedImages: [],
+        subheadings: [],
+        streamers: [],
+        sidebars: [],
+        captions: new Map<string, string>(),
+        authorNames: [],
+        authorPhotoFilenames: new Set<string>(),
+      };
+    }
+
     it("should save articles to database with correct edition_id", async () => {
       const mockPrisma = createMockPrisma();
 
       const articles = [
-        {
-          title: "Test Article",
+        createSaveArticle("Test Article", {
           chapeau: "Test chapeau",
           content: "<p>Test content</p>",
           excerpt: "Test excerpt",
           category: "Test",
-          pageStart: 2,
-          pageEnd: 3,
-          sourceSpreadIndexes: [1],
-          referencedImages: [],
-          subheadings: [],
-          streamers: [],
-          sidebars: [],
-          captions: new Map<string, string>(),
-        },
+        }),
       ];
 
       vi.mocked(mockPrisma.$transaction).mockResolvedValue([
@@ -707,36 +731,8 @@ describe("article-extractor", () => {
       const mockPrisma = createMockPrisma();
 
       const articles = [
-        {
-          title: "Article 1",
-          chapeau: null,
-          content: "Content 1",
-          excerpt: "Excerpt 1",
-          category: null,
-          pageStart: 2,
-          pageEnd: 3,
-          sourceSpreadIndexes: [1],
-          referencedImages: [],
-          subheadings: [],
-          streamers: [],
-          sidebars: [],
-          captions: new Map<string, string>(),
-        },
-        {
-          title: "Article 2",
-          chapeau: null,
-          content: "Content 2",
-          excerpt: "Excerpt 2",
-          category: null,
-          pageStart: 4,
-          pageEnd: 5,
-          sourceSpreadIndexes: [2],
-          referencedImages: [],
-          subheadings: [],
-          streamers: [],
-          sidebars: [],
-          captions: new Map<string, string>(),
-        },
+        createSaveArticle("Article 1", { content: "Content 1", excerpt: "Excerpt 1" }),
+        createSaveArticle("Article 2", { content: "Content 2", excerpt: "Excerpt 2", pageStart: 4, pageEnd: 5 }),
       ];
 
       vi.mocked(mockPrisma.$transaction).mockResolvedValue([
@@ -787,23 +783,7 @@ describe("article-extractor", () => {
     it("should handle database transaction failure gracefully", async () => {
       const mockPrisma = createMockPrisma();
 
-      const articles = [
-        {
-          title: "Test Article",
-          chapeau: null,
-          content: "Content",
-          excerpt: "Excerpt",
-          category: null,
-          pageStart: 2,
-          pageEnd: 3,
-          sourceSpreadIndexes: [1],
-          referencedImages: [],
-          subheadings: [],
-          streamers: [],
-          sidebars: [],
-          captions: new Map<string, string>(),
-        },
-      ];
+      const articles = [createSaveArticle("Test Article")];
 
       vi.mocked(mockPrisma.$transaction).mockRejectedValue(
         new Error("Foreign key constraint failed: edition not found")
@@ -820,23 +800,7 @@ describe("article-extractor", () => {
     it("should handle database connection failure gracefully", async () => {
       const mockPrisma = createMockPrisma();
 
-      const articles = [
-        {
-          title: "Test Article",
-          chapeau: null,
-          content: "Content",
-          excerpt: "Excerpt",
-          category: null,
-          pageStart: 2,
-          pageEnd: 3,
-          sourceSpreadIndexes: [1],
-          referencedImages: [],
-          subheadings: [],
-          streamers: [],
-          sidebars: [],
-          captions: new Map<string, string>(),
-        },
-      ];
+      const articles = [createSaveArticle("Test Article")];
 
       vi.mocked(mockPrisma.$transaction).mockRejectedValue(
         new Error("Connection refused")

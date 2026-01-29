@@ -19,11 +19,12 @@ import { join } from "path";
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
-import { loadXhtmlExport } from "./xhtml-loader";
+import { loadXhtmlExport, extractCoverMetadata } from "./xhtml-loader";
 import { extractArticles, saveArticles } from "./article-extractor";
 import { extractAuthorsFromArticles, saveAuthors } from "./author-extractor";
 import { mapImagesToArticles, saveImages } from "./rich-content-extractor";
 import { processPdf } from "@/services/pdf";
+import type { CoverHeadline } from "@/types";
 
 /**
  * Structured log entry for parser operations
@@ -185,6 +186,17 @@ export async function processEdition(
       imagesCount: xhtmlExport.images.images.size,
     });
 
+    // Extract cover metadata from cover page (spread index 0)
+    let coverHeadlines: CoverHeadline[] = [];
+    const coverSpread = xhtmlExport.spreads.find((s) => s.spreadIndex === 0);
+    if (coverSpread) {
+      coverHeadlines = extractCoverMetadata(coverSpread, xhtmlExport.styles);
+      log("info", "Orchestrator", "Cover metadata extracted", {
+        editionId,
+        headlinesCount: coverHeadlines.length,
+      });
+    }
+
     // Wait for PDF conversion to complete
     const pdfResult = await pdfResultPromise;
 
@@ -329,8 +341,8 @@ export async function processEdition(
       status = "completed_with_errors";
     }
 
-    // Update edition status in database
-    await updateEditionStatus(editionId, status);
+    // Update edition status and cover headlines in database
+    await updateEditionStatus(editionId, status, coverHeadlines);
 
     log("info", "Orchestrator", "Processing completed", {
       editionId,
@@ -384,15 +396,21 @@ export async function processEdition(
 }
 
 /**
- * Update the edition status in the database
+ * Update the edition status and cover headlines in the database
  */
 async function updateEditionStatus(
   editionId: number,
-  status: ProcessingResult["status"]
+  status: ProcessingResult["status"],
+  coverHeadlines?: CoverHeadline[]
 ): Promise<void> {
   await prisma.edition.update({
     where: { id: editionId },
-    data: { status },
+    data: {
+      status,
+      ...(coverHeadlines && coverHeadlines.length > 0
+        ? { cover_headlines: coverHeadlines as unknown as Parameters<typeof prisma.edition.update>[0]["data"]["cover_headlines"] }
+        : {}),
+    },
   });
 }
 
@@ -426,7 +444,7 @@ export async function getEditionProcessingStatus(
 }
 
 // Re-export for convenience
-export { loadXhtmlExport } from "./xhtml-loader";
+export { loadXhtmlExport, extractCoverMetadata } from "./xhtml-loader";
 export { extractArticles, saveArticles } from "./article-extractor";
 export { extractAuthorsFromArticles, saveAuthors } from "./author-extractor";
 export {

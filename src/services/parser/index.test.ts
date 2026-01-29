@@ -17,6 +17,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("./xhtml-loader", () => ({
   loadXhtmlExport: vi.fn(),
+  extractCoverMetadata: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock("./article-extractor", () => ({
@@ -62,6 +63,10 @@ function createMockStyles(): StyleAnalysis {
     streamerClasses: ["Streamer"],
     sidebarClasses: ["Kader"],
     captionClasses: ["Bijschrift"],
+    coverTitleClasses: [],
+    coverChapeauClasses: [],
+    introVerseClasses: [],
+    authorBioClasses: [],
   };
 }
 
@@ -73,6 +78,39 @@ function createMockSpread(index: number): LoadedSpread {
     pageStart: index === 0 ? 1 : index * 2,
     pageEnd: index === 0 ? 1 : index * 2 + 1,
     html: "<html><body><p class='Titel'>Test</p></body></html>",
+  };
+}
+
+// Helper to create mock article with all required fields
+function createMockArticle(
+  title: string,
+  options: {
+    chapeau?: string | null;
+    content?: string;
+    excerpt?: string;
+    category?: string | null;
+    pageStart?: number;
+    pageEnd?: number;
+    referencedImages?: string[];
+  } = {}
+) {
+  return {
+    title,
+    chapeau: options.chapeau ?? null,
+    content: options.content ?? `<p>${title} content</p>`,
+    excerpt: options.excerpt ?? `${title} excerpt`,
+    category: options.category ?? null,
+    authorBio: null,
+    pageStart: options.pageStart ?? 2,
+    pageEnd: options.pageEnd ?? 3,
+    sourceSpreadIndexes: [1],
+    referencedImages: options.referencedImages ?? [],
+    subheadings: [],
+    streamers: [],
+    sidebars: [],
+    captions: new Map(),
+    authorNames: [],
+    authorPhotoFilenames: new Set<string>(),
   };
 }
 
@@ -124,44 +162,29 @@ describe("Parser Orchestration Service", () => {
 
       vi.mocked(extractArticles).mockResolvedValue({
         articles: [
-          {
-            title: "Test Article 1",
+          createMockArticle("Test Article 1", {
             chapeau: "Test chapeau",
             content: "<p>Content 1</p>",
             excerpt: "Content 1",
             category: "Test",
             pageStart: 2,
             pageEnd: 3,
-            sourceSpreadIndexes: [1],
             referencedImages: ["test.jpg"],
-            subheadings: [],
-            streamers: [],
-            sidebars: [],
-            captions: new Map(),
-          },
-          {
-            title: "Test Article 2",
-            chapeau: null,
+          }),
+          createMockArticle("Test Article 2", {
             content: "<p>Content 2</p>",
             excerpt: "Content 2",
-            category: null,
             pageStart: 4,
             pageEnd: 5,
-            sourceSpreadIndexes: [2],
-            referencedImages: [],
-            subheadings: [],
-            streamers: [],
-            sidebars: [],
-            captions: new Map(),
-          },
+          }),
         ],
         errors: [],
       });
 
       vi.mocked(saveArticles).mockResolvedValue({
         articles: [
-          { id: 1, edition_id: 1, title: "Test Article 1", chapeau: "Test chapeau", content: "<p>Content 1</p>", excerpt: "Content 1", category: "Test", page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() },
-          { id: 2, edition_id: 1, title: "Test Article 2", chapeau: null, content: "<p>Content 2</p>", excerpt: "Content 2", category: null, page_start: 4, page_end: 5, created_at: new Date(), updated_at: new Date() },
+          { id: 1, edition_id: 1, title: "Test Article 1", chapeau: "Test chapeau", content: "<p>Content 1</p>", excerpt: "Content 1", category: "Test", author_bio: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() },
+          { id: 2, edition_id: 1, title: "Test Article 2", chapeau: null, content: "<p>Content 2</p>", excerpt: "Content 2", category: null, author_bio: null, page_start: 4, page_end: 5, created_at: new Date(), updated_at: new Date() },
         ],
         errors: [],
       });
@@ -192,6 +215,7 @@ describe("Parser Orchestration Service", () => {
         edition_number: 123,
         edition_date: new Date(),
         status: "completed",
+        cover_headlines: null,
         created_at: new Date(),
         updated_at: new Date(),
       });
@@ -236,28 +260,12 @@ describe("Parser Orchestration Service", () => {
       vi.mocked(loadXhtmlExport).mockResolvedValue(createMockExport(1));
 
       vi.mocked(extractArticles).mockResolvedValue({
-        articles: [
-          {
-            title: "Test Article",
-            chapeau: null,
-            content: "<p>Content</p>",
-            excerpt: "Content",
-            category: null,
-            pageStart: 2,
-            pageEnd: 3,
-            sourceSpreadIndexes: [1],
-            referencedImages: [],
-            subheadings: [],
-            streamers: [],
-            sidebars: [],
-            captions: new Map(),
-          },
-        ],
+        articles: [createMockArticle("Test Article", { content: "<p>Content</p>", excerpt: "Content" })],
         errors: [],
       });
 
       vi.mocked(saveArticles).mockResolvedValue({
-        articles: [{ id: 1, edition_id: 1, title: "Test Article", chapeau: null, content: "<p>Content</p>", excerpt: "Content", category: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() }],
+        articles: [{ id: 1, edition_id: 1, title: "Test Article", chapeau: null, content: "<p>Content</p>", excerpt: "Content", category: null, author_bio: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() }],
         errors: [],
       });
 
@@ -329,7 +337,7 @@ describe("Parser Orchestration Service", () => {
       });
 
       vi.mocked(saveArticles).mockResolvedValue({
-        articles: [{ id: 1, edition_id: 1, title: "Working Article", chapeau: null, content: "<p>Content</p>", excerpt: "Content", category: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() }],
+        articles: [{ id: 1, edition_id: 1, title: "Working Article", chapeau: null, content: "<p>Content</p>", excerpt: "Content", category: null, author_bio: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() }],
         errors: [],
       });
 
@@ -402,29 +410,13 @@ describe("Parser Orchestration Service", () => {
       vi.mocked(loadXhtmlExport).mockResolvedValue(createMockExport(1));
 
       vi.mocked(extractArticles).mockResolvedValue({
-        articles: [
-          {
-            title: "Test Article",
-            chapeau: null,
-            content: "<p>Content</p>",
-            excerpt: "Content",
-            category: null,
-            pageStart: 2,
-            pageEnd: 3,
-            sourceSpreadIndexes: [1],
-            referencedImages: [],
-            subheadings: [],
-            streamers: [],
-            sidebars: [],
-            captions: new Map(),
-          },
-        ],
+        articles: [createMockArticle("Test Article", { content: "<p>Content</p>", excerpt: "Content" })],
         errors: [],
       });
 
       // saveArticles fails for some reason
       vi.mocked(saveArticles).mockResolvedValue({
-        articles: [{ id: 1, edition_id: 1, title: "Test Article", chapeau: null, content: "<p>Content</p>", excerpt: "Content", category: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() }],
+        articles: [{ id: 1, edition_id: 1, title: "Test Article", chapeau: null, content: "<p>Content</p>", excerpt: "Content", category: null, author_bio: null, page_start: 2, page_end: 3, created_at: new Date(), updated_at: new Date() }],
         errors: ["Database timeout on batch insert"],
       });
 
@@ -449,6 +441,7 @@ describe("Parser Orchestration Service", () => {
         edition_number: 123,
         edition_date: new Date(),
         status: "completed",
+        cover_headlines: null,
         created_at: new Date(),
         updated_at: new Date(),
         _count: {

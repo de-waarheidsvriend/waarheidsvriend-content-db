@@ -1,4 +1,3 @@
-import * as cheerio from "cheerio";
 import { copyFile, mkdir } from "fs/promises";
 import { join, basename } from "path";
 import type { PrismaClient, Author, ArticleAuthor } from "@prisma/client";
@@ -7,16 +6,15 @@ import type {
   ExtractedAuthor,
   AuthorExtractionResult,
   XhtmlExport,
-  StyleAnalysis,
-  LoadedSpread,
 } from "@/types";
 import { htmlToPlainText } from "./html-cleaner";
 
 /**
  * Extract authors from articles and XHTML export
  *
- * This function analyzes articles to extract author information and matches
- * author photos from the XHTML export image index.
+ * With the new title→■ boundary detection, author elements are already grouped
+ * with their articles. This function uses article.authorNames (extracted during
+ * article parsing) instead of doing spread-level matching.
  *
  * @param articles - Array of extracted articles from extractArticles()
  * @param xhtmlExport - The loaded XHTML export containing styles and images
@@ -33,21 +31,15 @@ export function extractAuthorsFromArticles(
     `[Author Extractor] Processing ${articles.length} articles for author extraction`
   );
 
-  // Extract author elements from spreads
-  const authorElementsByArticle = extractAuthorElementsFromSpreads(
-    xhtmlExport.spreads,
-    xhtmlExport.styles,
-    articles
-  );
-
   // Process each article for authors
+  // Authors are now pre-extracted via title→■ boundaries in article.authorNames
   for (const article of articles) {
     try {
-      const authorElements = authorElementsByArticle.get(article.title) || [];
-      const authorNames = parseAuthorNames(authorElements);
+      // Use authorNames from article (already extracted between title and ■)
+      const authorNames = article.authorNames || [];
 
-      for (const name of authorNames) {
-        const normalizedName = normalizeName(name);
+      for (const rawName of authorNames) {
+        const normalizedName = normalizeName(rawName);
         if (!normalizedName) continue;
 
         if (authorMap.has(normalizedName)) {
@@ -58,11 +50,32 @@ export function extractAuthorsFromArticles(
           }
         } else {
           // Create new author entry
-          const photoInfo = matchAuthorPhoto(
-            normalizedName,
-            xhtmlExport.images.authorPhotos,
-            xhtmlExport.images.images
-          );
+          // First check if article identified this as an author photo via DOM position
+          let photoInfo = { filename: null as string | null, sourcePath: null as string | null };
+
+          // Try to find author photo from article's authorPhotoFilenames (DOM-based detection)
+          if (article.authorPhotoFilenames && article.authorPhotoFilenames.size > 0) {
+            // Use the first photo that matches any part of the author name
+            const nameParts = normalizedName.toLowerCase().split(" ");
+            for (const photoFilename of article.authorPhotoFilenames) {
+              const photoLower = photoFilename.toLowerCase();
+              const lastName = nameParts[nameParts.length - 1];
+              if (photoLower.includes(lastName)) {
+                const sourcePath = xhtmlExport.images.images.get(photoFilename) || null;
+                photoInfo = { filename: photoFilename, sourcePath };
+                break;
+              }
+            }
+          }
+
+          // Fallback to traditional photo matching if DOM-based didn't find anything
+          if (!photoInfo.filename) {
+            photoInfo = matchAuthorPhoto(
+              normalizedName,
+              xhtmlExport.images.authorPhotos,
+              xhtmlExport.images.images
+            );
+          }
 
           authorMap.set(normalizedName, {
             name: normalizedName,
@@ -85,53 +98,6 @@ export function extractAuthorsFromArticles(
   );
 
   return { authors, errors };
-}
-
-/**
- * Extract author elements from spreads and map them to articles
- */
-function extractAuthorElementsFromSpreads(
-  spreads: LoadedSpread[],
-  styles: StyleAnalysis,
-  articles: ExtractedArticle[]
-): Map<string, string[]> {
-  const result = new Map<string, string[]>();
-
-  // Build selector for author elements
-  const authorSelector = styles.authorClasses.map((c) => `.${c}`).join(", ");
-  if (!authorSelector) {
-    return result;
-  }
-
-  // Map spreads to articles based on page numbers
-  for (const spread of spreads) {
-    const $ = cheerio.load(spread.html);
-    const authorElements: string[] = [];
-
-    // Extract all author text from this spread
-    $(authorSelector).each((_, el) => {
-      const text = $(el).text().trim();
-      if (text) {
-        authorElements.push(text);
-      }
-    });
-
-    if (authorElements.length === 0) continue;
-
-    // Find articles that overlap with this spread
-    for (const article of articles) {
-      if (
-        spread.pageStart <= article.pageEnd &&
-        spread.pageEnd >= article.pageStart
-      ) {
-        const existing = result.get(article.title) || [];
-        existing.push(...authorElements);
-        result.set(article.title, existing);
-      }
-    }
-  }
-
-  return result;
 }
 
 /**

@@ -320,7 +320,8 @@ describe("structure-analyzer", () => {
       const result = await analyzeHtmlClasses("/test/html");
 
       expect(result.chapeauClasses).toContain("Artikelen_Chapeau-blauw");
-      expect(result.chapeauClasses).toContain("Omslag_ankeiler");
+      // Omslag_ankeiler goes to coverChapeauClasses (cover-specific)
+      expect(result.coverChapeauClasses).toContain("Omslag_ankeiler");
       expect(result.chapeauClasses).toContain("Hoofdartikel_Intro-wit");
     });
 
@@ -454,6 +455,10 @@ describe("structure-analyzer", () => {
         streamerClasses: [],
         sidebarClasses: [],
         captionClasses: [],
+        coverTitleClasses: [],
+        coverChapeauClasses: [],
+        introVerseClasses: [],
+        authorBioClasses: [],
       };
 
       const b = {
@@ -468,6 +473,10 @@ describe("structure-analyzer", () => {
         streamerClasses: [],
         sidebarClasses: [],
         captionClasses: [],
+        coverTitleClasses: [],
+        coverChapeauClasses: [],
+        introVerseClasses: [],
+        authorBioClasses: [],
       };
 
       const result = mergeStyleAnalysis(a, b);
@@ -491,6 +500,10 @@ describe("structure-analyzer", () => {
         streamerClasses: [],
         sidebarClasses: [],
         captionClasses: [],
+        coverTitleClasses: [],
+        coverChapeauClasses: [],
+        introVerseClasses: [],
+        authorBioClasses: [],
       };
 
       const b = {
@@ -505,6 +518,10 @@ describe("structure-analyzer", () => {
         streamerClasses: [],
         sidebarClasses: [],
         captionClasses: [],
+        coverTitleClasses: [],
+        coverChapeauClasses: [],
+        introVerseClasses: [],
+        authorBioClasses: [],
       };
 
       const result = mergeStyleAnalysis(a, b);
@@ -526,6 +543,10 @@ describe("structure-analyzer", () => {
         streamerClasses: ["Streamer-1"],
         sidebarClasses: ["Kader-1"],
         captionClasses: ["Bijschrift-1"],
+        coverTitleClasses: [],
+        coverChapeauClasses: [],
+        introVerseClasses: [],
+        authorBioClasses: [],
       };
 
       const b = {
@@ -540,6 +561,10 @@ describe("structure-analyzer", () => {
         streamerClasses: ["Streamer-2"],
         sidebarClasses: ["Kader-2"],
         captionClasses: ["Bijschrift-2"],
+        coverTitleClasses: [],
+        coverChapeauClasses: [],
+        introVerseClasses: [],
+        authorBioClasses: [],
       };
 
       const result = mergeStyleAnalysis(a, b);

@@ -43,6 +43,10 @@ function createMockStyles(
     streamerClasses: ["Streamer", "Quote"],
     sidebarClasses: ["Kader", "Sidebar"],
     captionClasses: ["Bijschrift", "Caption"],
+    coverTitleClasses: [],
+    coverChapeauClasses: [],
+    introVerseClasses: [],
+    authorBioClasses: [],
     ...overrides,
   };
 }
@@ -102,6 +106,7 @@ function createMockArticle(
     content: "<p>Test content</p>",
     excerpt: "Test excerpt",
     category: null,
+    authorBio: null,
     pageStart: 2,
     pageEnd: 3,
     sourceSpreadIndexes: [1],
@@ -110,6 +115,8 @@ function createMockArticle(
     streamers: [],
     sidebars: [],
     captions: new Map(),
+    authorNames: [],
+    authorPhotoFilenames: new Set<string>(),
     ...options,
   };
 }

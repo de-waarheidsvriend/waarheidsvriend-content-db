@@ -13,12 +13,13 @@ datasource db {
 // Edition Model - Edities met metadata (FR35)
 // ============================================================================
 model Edition {
-  id             Int         @id @default(autoincrement())
-  edition_number Int         @unique
-  edition_date   DateTime
-  status         String      @default("pending")
-  created_at     DateTime    @default(now())
-  updated_at     DateTime    @updatedAt
+  id              Int         @id @default(autoincrement())
+  edition_number  Int         @unique
+  edition_date    DateTime
+  status          String      @default("pending")
+  cover_headlines Json?       // [{title, subtitle?, pageRef?}]
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
 
   // Relations
   articles       Article[]
@@ -38,6 +39,7 @@ model Article {
   content    String
   excerpt    String?
   category   String?
+  author_bio String?
   page_start Int?
   page_end   Int?
   created_at DateTime @default(now())

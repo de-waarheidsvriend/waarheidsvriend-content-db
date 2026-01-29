@@ -3,6 +3,15 @@
  */
 
 /**
+ * Cover headline extracted from edition cover page
+ */
+export interface CoverHeadline {
+  title: string;
+  subtitle?: string;
+  pageRef?: string;
+}
+
+/**
  * Metadata extracted from XHTML edition export
  */
 export interface EditionMetadata {
@@ -75,6 +84,14 @@ export interface StyleAnalysis {
   sidebarClasses: string[];
   /** Classes that indicate captions/bijschriften */
   captionClasses: string[];
+  /** Classes that indicate cover titles (Omslag_Kop) */
+  coverTitleClasses: string[];
+  /** Classes that indicate cover chapeau/ankeiler */
+  coverChapeauClasses: string[];
+  /** Classes that indicate intro verses (Meditatie_kop-boven-vers) */
+  introVerseClasses: string[];
+  /** Classes that indicate author bio/onderschrift */
+  authorBioClasses: string[];
 }
 
 /**
@@ -109,6 +126,8 @@ export interface ExtractedArticle {
   excerpt: string | null;
   /** Category/rubriek if detected */
   category: string | null;
+  /** Author bio/onderschrift (e.g., "is predikant van...") */
+  authorBio: string | null;
   /** First page where article appears */
   pageStart: number;
   /** Last page where article appears */
@@ -125,13 +144,33 @@ export interface ExtractedArticle {
   sidebars: string[];
   /** Image captions extracted (plain text), indexed by image filename */
   captions: Map<string, string>;
+  /** Author names extracted from this article's author elements */
+  authorNames: string[];
+  /** Image filenames identified as author photos (to be filtered) */
+  authorPhotoFilenames: Set<string>;
 }
 
 /**
  * Intermediate element during parsing
  */
 export interface ArticleElement {
-  type: "title" | "chapeau" | "body" | "author" | "category" | "image" | "subheading" | "streamer" | "sidebar" | "caption" | "unknown";
+  type:
+    | "title"
+    | "chapeau"
+    | "body"
+    | "author"
+    | "category"
+    | "image"
+    | "subheading"
+    | "streamer"
+    | "sidebar"
+    | "caption"
+    | "cover-title"
+    | "cover-chapeau"
+    | "intro-verse"
+    | "author-bio"
+    | "article-end"  // ■ marker
+    | "unknown";
   content: string;
   className: string;
   spreadIndex: number;

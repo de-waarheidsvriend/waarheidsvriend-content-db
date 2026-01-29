@@ -43,6 +43,10 @@ function createMockStyles(
     streamerClasses: ["Streamer"],
     sidebarClasses: ["Kader"],
     captionClasses: ["Bijschrift"],
+    coverTitleClasses: [],
+    coverChapeauClasses: [],
+    introVerseClasses: [],
+    authorBioClasses: [],
     ...overrides,
   };
 }
@@ -93,7 +97,8 @@ function createMockExport(
 function createMockArticle(
   title: string,
   pageStart: number = 2,
-  pageEnd: number = 3
+  pageEnd: number = 3,
+  authorNames: string[] = []
 ): ExtractedArticle {
   return {
     title,
@@ -101,6 +106,7 @@ function createMockArticle(
     content: "<p>Test content</p>",
     excerpt: "Test excerpt",
     category: null,
+    authorBio: null,
     pageStart,
     pageEnd,
     sourceSpreadIndexes: [1],
@@ -109,6 +115,8 @@ function createMockArticle(
     streamers: [],
     sidebars: [],
     captions: new Map<string, string>(),
+    authorNames,
+    authorPhotoFilenames: new Set<string>(),
   };
 }
 
@@ -293,7 +301,8 @@ describe("author-extractor", () => {
         </html>
       `
       );
-      const articles = [createMockArticle("Test Article")];
+      // Author names are pre-extracted during article parsing
+      const articles = [createMockArticle("Test Article", 2, 3, ["Jan Jansen"])];
 
       const result = extractAuthorsFromArticles(
         articles,
@@ -319,7 +328,8 @@ describe("author-extractor", () => {
         </html>
       `
       );
-      const articles = [createMockArticle("Collaboration Article")];
+      // Author names are pre-extracted during article parsing
+      const articles = [createMockArticle("Collaboration Article", 2, 3, ["Jan Jansen", "Piet de Vries"])];
 
       const result = extractAuthorsFromArticles(
         articles,
@@ -347,9 +357,10 @@ describe("author-extractor", () => {
         </html>
       `
       );
+      // Author names are pre-extracted during article parsing
       const articles = [
-        createMockArticle("First Article"),
-        createMockArticle("Second Article"),
+        createMockArticle("First Article", 2, 3, ["Jan Jansen"]),
+        createMockArticle("Second Article", 2, 3, ["Jan Jansen"]),
       ];
 
       const result = extractAuthorsFromArticles(
@@ -375,7 +386,8 @@ describe("author-extractor", () => {
         </html>
       `
       );
-      const articles = [createMockArticle("Article with Photo")];
+      // Author names are pre-extracted during article parsing
+      const articles = [createMockArticle("Article with Photo", 2, 3, ["Jan Jansen"])];
       const authorPhotos = ["jan-jansen.jpg"];
 
       const result = extractAuthorsFromArticles(
@@ -434,7 +446,8 @@ describe("author-extractor", () => {
         </html>
       `
       );
-      const articles = [createMockArticle("Article")];
+      // Author names are now pre-extracted during article parsing and passed via authorNames
+      const articles = [createMockArticle("Article", 2, 3, ["Piet de Vries"])];
 
       const result = extractAuthorsFromArticles(
         articles,

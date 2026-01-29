@@ -18,6 +18,10 @@ function createMockXhtmlExport(
     streamerClasses: [],
     sidebarClasses: [],
     captionClasses: [],
+    coverTitleClasses: [],
+    coverChapeauClasses: [],
+    introVerseClasses: [],
+    authorBioClasses: [],
   };
 
   const images: ImageIndex = {
@@ -41,7 +45,8 @@ function createMockXhtmlExport(
 function createMockArticle(
   title: string,
   referencedImages: string[],
-  captions: Map<string, string> = new Map()
+  captions: Map<string, string> = new Map(),
+  authorPhotoFilenames: Set<string> = new Set()
 ): ExtractedArticle {
   return {
     title,
@@ -49,6 +54,7 @@ function createMockArticle(
     content: "<p>Test content</p>",
     excerpt: "Test content",
     category: null,
+    authorBio: null,
     pageStart: 2,
     pageEnd: 3,
     sourceSpreadIndexes: [1],
@@ -57,6 +63,8 @@ function createMockArticle(
     streamers: [],
     sidebars: [],
     captions,
+    authorNames: [],
+    authorPhotoFilenames,
   };
 }
 

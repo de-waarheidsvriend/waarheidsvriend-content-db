@@ -47,7 +47,7 @@ export async function processPdf(
   const insertData = result.imagePaths.map((absolutePath, index) => ({
     edition_id: editionId,
     page_number: index + 1, // 1-indexed
-    image_url: `/uploads/${relative(uploadsRoot, absolutePath)}`,
+    image_url: relative(uploadsRoot, absolutePath),
   }));
 
   try {

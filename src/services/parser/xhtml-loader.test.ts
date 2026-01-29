@@ -64,36 +64,36 @@ describe("xhtml-loader", () => {
       });
     });
 
-    it("should parse publication-1.html as spread 1 (pages 2-3)", () => {
+    it("should parse publication-1.html as page 2", () => {
       const result = parseSpreadFromFilename("publication-1.html");
 
       expect(result).toEqual({
         filename: "publication-1.html",
         spreadIndex: 1,
         pageStart: 2,
-        pageEnd: 3,
+        pageEnd: 2,
       });
     });
 
-    it("should parse publication-2.html as spread 2 (pages 4-5)", () => {
+    it("should parse publication-2.html as page 3", () => {
       const result = parseSpreadFromFilename("publication-2.html");
 
       expect(result).toEqual({
         filename: "publication-2.html",
         spreadIndex: 2,
-        pageStart: 4,
-        pageEnd: 5,
+        pageStart: 3,
+        pageEnd: 3,
       });
     });
 
-    it("should parse publication-10.html correctly", () => {
+    it("should parse publication-10.html as page 11", () => {
       const result = parseSpreadFromFilename("publication-10.html");
 
       expect(result).toEqual({
         filename: "publication-10.html",
         spreadIndex: 10,
-        pageStart: 20,
-        pageEnd: 21,
+        pageStart: 11,
+        pageEnd: 11,
       });
     });
 
