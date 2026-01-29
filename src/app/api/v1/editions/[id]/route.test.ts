@@ -108,7 +108,7 @@ describe("GET /api/v1/editions/[id]", () => {
   });
 
   describe("Success Response", () => {
-    it("should return edition with correct format", async () => {
+    it("should return edition with correct format (id as string)", async () => {
       const mockDate = new Date("2026-01-15T10:00:00.000Z");
       vi.mocked(prisma.edition.findUnique).mockResolvedValue({
         id: 1,
@@ -127,7 +127,7 @@ describe("GET /api/v1/editions/[id]", () => {
       expect(response.status).toBe(200);
       expect(json.success).toBe(true);
       expect(json.data).toEqual({
-        id: 1,
+        id: "1",
         editionNumber: 42,
         editionDate: "2026-01-15T10:00:00.000Z",
         articleCount: 5,
@@ -135,7 +135,7 @@ describe("GET /api/v1/editions/[id]", () => {
       });
     });
 
-    it("should include all required fields", async () => {
+    it("should include all required fields with id as string", async () => {
       const mockDate = new Date("2026-01-15T10:00:00.000Z");
       vi.mocked(prisma.edition.findUnique).mockResolvedValue({
         id: 1,
@@ -152,6 +152,7 @@ describe("GET /api/v1/editions/[id]", () => {
       const json = await response.json();
 
       expect(json.data).toHaveProperty("id");
+      expect(typeof json.data.id).toBe("string");
       expect(json.data).toHaveProperty("editionNumber");
       expect(json.data).toHaveProperty("editionDate");
       expect(json.data).toHaveProperty("articleCount");

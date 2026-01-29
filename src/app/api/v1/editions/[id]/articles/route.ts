@@ -1,35 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey, unauthorizedResponse } from "@/lib/api-key";
+import type {
+  ArticleSummary,
+  SuccessResponse,
+  ErrorResponse,
+  ApiResponse,
+} from "@/types/api";
 
-interface ArticleSummary {
-  id: number;
-  title: string;
-  chapeau: string | null;
-  category: string | null;
-  pageStart: number | null;
-  pageEnd: number | null;
-}
-
-interface SuccessResponse {
-  success: true;
-  data: ArticleSummary[];
-}
-
-interface ErrorResponse {
-  success: false;
-  error: { code: string; message: string };
-}
-
-type ApiResponse = SuccessResponse | ErrorResponse;
+type ArticlesResponse = ApiResponse<ArticleSummary[]>;
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse<ApiResponse>> {
+): Promise<NextResponse<ArticlesResponse>> {
   // API Key validation
   if (!validateApiKey(request)) {
-    return unauthorizedResponse() as NextResponse<ApiResponse>;
+    return unauthorizedResponse() as NextResponse<ArticlesResponse>;
   }
 
   const { id } = await params;
@@ -42,7 +29,7 @@ export async function GET(
         error: { code: "VALIDATION_ERROR", message: "Invalid edition ID" },
       },
       { status: 400 }
-    );
+    ) as NextResponse<ArticlesResponse>;
   }
 
   try {
@@ -77,7 +64,7 @@ export async function GET(
     });
 
     const data: ArticleSummary[] = articles.map((article) => ({
-      id: article.id,
+      id: String(article.id),
       title: article.title,
       chapeau: article.chapeau,
       category: article.category,
@@ -85,7 +72,7 @@ export async function GET(
       pageEnd: article.page_end,
     }));
 
-    return NextResponse.json<SuccessResponse>({ success: true, data });
+    return NextResponse.json<SuccessResponse<ArticleSummary[]>>({ success: true, data });
   } catch (error) {
     console.error("[API] Error fetching articles:", error);
     return NextResponse.json<ErrorResponse>(

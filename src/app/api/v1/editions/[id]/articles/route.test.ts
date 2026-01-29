@@ -124,7 +124,7 @@ describe("GET /api/v1/editions/[id]/articles", () => {
       expect(json.data).toEqual([]);
     });
 
-    it("should return articles with correct format", async () => {
+    it("should return articles with correct format (id as string)", async () => {
       vi.mocked(prisma.edition.findUnique).mockResolvedValue({ id: 1 } as Awaited<ReturnType<typeof prisma.edition.findUnique>>);
       vi.mocked(prisma.article.findMany).mockResolvedValue([
         {
@@ -153,7 +153,7 @@ describe("GET /api/v1/editions/[id]/articles", () => {
       expect(json.success).toBe(true);
       expect(json.data).toHaveLength(2);
       expect(json.data[0]).toEqual({
-        id: 1,
+        id: "1",
         title: "Test Article 1",
         chapeau: "This is the chapeau",
         category: "News",
@@ -161,7 +161,7 @@ describe("GET /api/v1/editions/[id]/articles", () => {
         pageEnd: 3,
       });
       expect(json.data[1]).toEqual({
-        id: 2,
+        id: "2",
         title: "Test Article 2",
         chapeau: null,
         category: null,
@@ -170,7 +170,7 @@ describe("GET /api/v1/editions/[id]/articles", () => {
       });
     });
 
-    it("should include all required fields", async () => {
+    it("should include all required fields with id as string", async () => {
       vi.mocked(prisma.edition.findUnique).mockResolvedValue({ id: 1 } as Awaited<ReturnType<typeof prisma.edition.findUnique>>);
       vi.mocked(prisma.article.findMany).mockResolvedValue([
         {
@@ -189,6 +189,7 @@ describe("GET /api/v1/editions/[id]/articles", () => {
 
       const article = json.data[0];
       expect(article).toHaveProperty("id");
+      expect(typeof article.id).toBe("string");
       expect(article).toHaveProperty("title");
       expect(article).toHaveProperty("chapeau");
       expect(article).toHaveProperty("category");

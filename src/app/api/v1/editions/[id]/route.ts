@@ -1,34 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey, unauthorizedResponse } from "@/lib/api-key";
+import type {
+  EditionDetail,
+  EditionStatus,
+  SuccessResponse,
+  ErrorResponse,
+  ApiResponse,
+} from "@/types/api";
 
-interface EditionDetail {
-  id: number;
-  editionNumber: number;
-  editionDate: string;
-  articleCount: number;
-  status: string;
-}
-
-interface SuccessResponse {
-  success: true;
-  data: EditionDetail;
-}
-
-interface ErrorResponse {
-  success: false;
-  error: { code: string; message: string };
-}
-
-type ApiResponse = SuccessResponse | ErrorResponse;
+type EditionDetailResponse = ApiResponse<EditionDetail>;
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse<ApiResponse>> {
+): Promise<NextResponse<EditionDetailResponse>> {
   // API Key validation
   if (!validateApiKey(request)) {
-    return unauthorizedResponse() as NextResponse<ApiResponse>;
+    return unauthorizedResponse() as NextResponse<EditionDetailResponse>;
   }
 
   const { id } = await params;
@@ -41,7 +30,7 @@ export async function GET(
         error: { code: "VALIDATION_ERROR", message: "Invalid edition ID" },
       },
       { status: 400 }
-    );
+    ) as NextResponse<EditionDetailResponse>;
   }
 
   try {
@@ -65,14 +54,14 @@ export async function GET(
     }
 
     const data: EditionDetail = {
-      id: edition.id,
+      id: String(edition.id),
       editionNumber: edition.edition_number,
       editionDate: edition.edition_date.toISOString(),
       articleCount: edition._count.articles,
-      status: edition.status,
+      status: edition.status as EditionStatus,
     };
 
-    return NextResponse.json<SuccessResponse>({ success: true, data });
+    return NextResponse.json<SuccessResponse<EditionDetail>>({ success: true, data });
   } catch (error) {
     console.error("[API] Error fetching edition:", error);
     return NextResponse.json<ErrorResponse>(
