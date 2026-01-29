@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageImages, type PageImage } from "@/hooks/usePageImages";
@@ -34,6 +34,7 @@ function SpreadImage({ pageImage, alt }: { pageImage: PageImage; alt: string }) 
       <img
         src={pageImage.imageUrl}
         alt={alt}
+        loading="lazy"
         className="w-full h-full object-contain"
       />
     </div>
@@ -49,10 +50,18 @@ export function PdfSpreadView({ editionId, pageStart, pageEnd }: PdfSpreadViewPr
   const { data: pageImages, isLoading, error } = usePageImages(editionId);
   const [currentSpreadIndex, setCurrentSpreadIndex] = useState(0);
 
-  // Reset spread index when article changes (pageStart/pageEnd change)
-  useEffect(() => {
-    setCurrentSpreadIndex(0);
-  }, [pageStart, pageEnd]);
+  // Track previous props to detect changes and reset spread index
+  const prevPropsRef = useRef({ editionId, pageStart, pageEnd });
+  if (
+    prevPropsRef.current.editionId !== editionId ||
+    prevPropsRef.current.pageStart !== pageStart ||
+    prevPropsRef.current.pageEnd !== pageEnd
+  ) {
+    prevPropsRef.current = { editionId, pageStart, pageEnd };
+    if (currentSpreadIndex !== 0) {
+      setCurrentSpreadIndex(0);
+    }
+  }
 
   // Calculate which pages are relevant for this article
   const relevantPages = useMemo(() => {
