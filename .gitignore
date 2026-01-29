@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+.vscode/
+
+# large sample files
+docs/*.pdf
 
 # debug
 npm-debug.log*
