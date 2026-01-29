@@ -26,11 +26,46 @@ export function parseDate(day: string, month: string, year: string): Date {
   return new Date(parseInt(year), monthIndex, parseInt(day));
 }
 
+async function findHtmlDir(xhtmlDir: string): Promise<string | null> {
+  // First, try the direct path (xhtmlDir/publication-web-resources/html)
+  const directPath = join(xhtmlDir, "publication-web-resources", "html");
+  try {
+    await readdir(directPath);
+    return directPath;
+  } catch {
+    // Not found directly, look for a content subfolder
+  }
+
+  // Look for a content subfolder (excluding __MACOSX)
+  try {
+    const entries = await readdir(xhtmlDir);
+    for (const entry of entries) {
+      if (entry === "__MACOSX" || entry.startsWith(".")) continue;
+      const subPath = join(xhtmlDir, entry, "publication-web-resources", "html");
+      try {
+        await readdir(subPath);
+        return subPath;
+      } catch {
+        // This subfolder doesn't have the expected structure
+      }
+    }
+  } catch {
+    // xhtmlDir doesn't exist or isn't readable
+  }
+
+  return null;
+}
+
 export async function extractMetadata(
   xhtmlDir: string
 ): Promise<EditionMetadata> {
   // Find HTML files in the publication-web-resources/html/ directory
-  const htmlDir = join(xhtmlDir, "publication-web-resources", "html");
+  const htmlDir = await findHtmlDir(xhtmlDir);
+
+  if (!htmlDir) {
+    console.warn("[Metadata Extractor] Could not find HTML directory in:", xhtmlDir);
+    return { editionNumber: null, editionDate: null };
+  }
 
   try {
     const files = await readdir(htmlDir);
