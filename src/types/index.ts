@@ -130,3 +130,25 @@ export interface ArticleExtractionResult {
   articles: ExtractedArticle[];
   errors: string[];
 }
+
+/**
+ * Extracted author before database save
+ */
+export interface ExtractedAuthor {
+  /** Author name (normalized) */
+  name: string;
+  /** Photo filename if found */
+  photoFilename: string | null;
+  /** Photo source path (relative to xhtml export root) */
+  photoSourcePath: string | null;
+  /** Article titles this author is linked to (for mapping to saved articles) */
+  articleTitles: string[];
+}
+
+/**
+ * Result of author extraction with errors for graceful degradation
+ */
+export interface AuthorExtractionResult {
+  authors: ExtractedAuthor[];
+  errors: string[];
+}
