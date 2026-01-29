@@ -42,8 +42,8 @@ export interface ArticleSummary {
   title: string;
   chapeau: string | null;
   category: string | null;
-  pageStart: number | null;
-  pageEnd: number | null;
+  pageStart: number;
+  pageEnd: number;
 }
 
 /**
@@ -141,8 +141,8 @@ export interface ArticleDetail {
   chapeau: string | null;
   excerpt: string | null;
   category: string | null;
-  pageStart: number | null;
-  pageEnd: number | null;
+  pageStart: number;
+  pageEnd: number;
   authors: AuthorInline[];
   featuredImage: FeaturedImage | null;
   contentBlocks: ApiContentBlock[];

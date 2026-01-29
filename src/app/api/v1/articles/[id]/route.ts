@@ -91,14 +91,19 @@ export async function GET(
       images: imageData,
     });
 
+    // Log warning if article has no content blocks (potential parsing issue)
+    if (contentBlocks.length === 0 && article.content) {
+      console.warn(`[API] Article ${articleId} has content but produced no content blocks. Content length: ${article.content.length}`);
+    }
+
     const data: ArticleDetail = {
       id: String(article.id),
       title: article.title,
       chapeau: article.chapeau,
       excerpt: article.excerpt,
       category: article.category,
-      pageStart: article.page_start,
-      pageEnd: article.page_end,
+      pageStart: article.page_start ?? 0,
+      pageEnd: article.page_end ?? 0,
       authors,
       featuredImage,
       contentBlocks,

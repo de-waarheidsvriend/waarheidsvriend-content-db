@@ -68,8 +68,8 @@ export async function GET(
       title: article.title,
       chapeau: article.chapeau,
       category: article.category,
-      pageStart: article.page_start,
-      pageEnd: article.page_end,
+      pageStart: article.page_start ?? 0,
+      pageEnd: article.page_end ?? 0,
     }));
 
     return NextResponse.json<SuccessResponse<ArticleSummary[]>>({ success: true, data });
