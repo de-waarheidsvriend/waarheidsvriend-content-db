@@ -19,8 +19,10 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build the application
+# Build the application (dummy DATABASE_URL needed for Next.js static analysis)
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npm run build
+ENV DATABASE_URL=""
 
 # Expose the Next.js port
 EXPOSE 3000

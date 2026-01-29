@@ -10,10 +10,6 @@ export default defineConfig({
     include: ['**/*.test.{ts,tsx}'],
     exclude: ['node_modules', '.next'],
     setupFiles: ['dotenv/config', './src/test/setup.ts'],
-    environmentMatchGlobs: [
-      // Use jsdom for React component tests
-      ['**/*.test.tsx', 'jsdom'],
-    ],
   },
   resolve: {
     alias: {
