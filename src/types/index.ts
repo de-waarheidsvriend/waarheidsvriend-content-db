@@ -14,3 +14,75 @@ export interface EditionMetadata {
  * Upload step states for progress tracking
  */
 export type UploadStep = "uploading" | "processing" | "parsing" | "completed";
+
+/**
+ * Spread information extracted from HTML filename
+ */
+export interface SpreadInfo {
+  filename: string;
+  spreadIndex: number;
+  pageStart: number;
+  pageEnd: number;
+}
+
+/**
+ * Loaded spread with HTML content
+ * Note: Cheerio parsing is done on-demand by consumers to avoid
+ * serialization issues and memory overhead for large exports
+ */
+export interface LoadedSpread extends SpreadInfo {
+  /** Raw HTML content */
+  html: string;
+}
+
+/**
+ * Index of images in the XHTML export
+ */
+export interface ImageIndex {
+  /** filename (without path) → relative path from xhtml root */
+  images: Map<string, string>;
+  /** Images likely belonging to articles */
+  articleImages: string[];
+  /** Author photo images */
+  authorPhotos: string[];
+  /** Decorative/logo images */
+  decorativeImages: string[];
+}
+
+/**
+ * CSS style analysis from InDesign export
+ */
+export interface StyleAnalysis {
+  /** CSS class name → semantic meaning */
+  classMap: Map<string, string>;
+  /** Classes that indicate article boundaries */
+  articleBoundaryClasses: string[];
+  /** Classes that indicate title elements */
+  titleClasses: string[];
+  /** Classes that indicate chapeau/intro text */
+  chapeauClasses: string[];
+  /** Classes that indicate body text */
+  bodyClasses: string[];
+  /** Classes that indicate author references */
+  authorClasses: string[];
+  /** Classes that indicate category/rubric */
+  categoryClasses: string[];
+}
+
+/**
+ * Complete XHTML export structure
+ */
+export interface XhtmlExport {
+  /** Base directory of the export */
+  rootDir: string;
+  /** Loaded spreads in order */
+  spreads: LoadedSpread[];
+  /** Image index */
+  images: ImageIndex;
+  /** CSS analysis */
+  styles: StyleAnalysis;
+  /** Metadata (from existing extractor) */
+  metadata: EditionMetadata;
+  /** Errors encountered during loading (for graceful degradation) */
+  errors: string[];
+}
