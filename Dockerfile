@@ -7,14 +7,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy source code
+# Copy all source files first
 COPY . .
+
+# Install dependencies (including devDependencies for prisma generate)
+RUN npm install
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -24,12 +21,14 @@ ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npm run build
 ENV DATABASE_URL=""
 
-# Copy and set up entrypoint script
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Remove dev dependencies for smaller image
+RUN npm prune --production
+
+# Make entrypoint executable
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Expose the Next.js port
 EXPOSE 3000
 
 # Start with entrypoint that runs migrations first
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
