@@ -20,7 +20,7 @@ export function ArticleCard({ article, editionId }: ArticleCardProps) {
   const authorNames = article.authors.map((a) => a.name).join(", ");
 
   return (
-    <Link href={`/editions/${editionId}/articles/${article.id}`}>
+    <Link href={`/review/${editionId}?article=${article.id}`}>
       <Card className="hover:border-primary/50 hover:shadow-md transition-all cursor-pointer">
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-4">

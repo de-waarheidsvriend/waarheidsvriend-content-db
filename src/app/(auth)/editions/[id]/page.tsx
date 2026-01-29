@@ -106,9 +106,14 @@ export default function EditionDetailPage({ params }: EditionDetailPageProps) {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <EditionHeader editionId={editionId} />
-        <Link href="/editions">
-          <Button variant="outline">Terug naar overzicht</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href={`/review/${editionId}`}>
+            <Button>Review starten</Button>
+          </Link>
+          <Link href="/editions">
+            <Button variant="outline">Terug naar overzicht</Button>
+          </Link>
+        </div>
       </div>
       <div>
         <h2 className="text-xl font-semibold mb-4">Artikelen</h2>
