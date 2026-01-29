@@ -24,8 +24,12 @@ ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npm run build
 ENV DATABASE_URL=""
 
+# Copy and set up entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Expose the Next.js port
 EXPOSE 3000
 
-# Start in production mode
-CMD ["npm", "start"]
+# Start with entrypoint that runs migrations first
+ENTRYPOINT ["/docker-entrypoint.sh"]
