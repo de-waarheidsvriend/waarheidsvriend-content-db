@@ -98,3 +98,52 @@ export interface PaginatedSuccessResponse<T> {
  * Paginated API response type
  */
 export type PaginatedApiResponse<T> = PaginatedSuccessResponse<T> | ErrorResponse;
+
+/**
+ * Author inline for article detail response
+ */
+export interface AuthorInline {
+  id: string;
+  name: string;
+  photoUrl: string | null;
+}
+
+/**
+ * Featured image for article detail response
+ */
+export interface FeaturedImage {
+  url: string;
+  caption: string | null;
+}
+
+/**
+ * Content block type
+ */
+export type ContentBlockType = "paragraph" | "subheading" | "image" | "quote" | "sidebar";
+
+/**
+ * Content block for article detail response
+ */
+export interface ApiContentBlock {
+  type: ContentBlockType;
+  content: string;
+  imageUrl?: string;
+  caption?: string;
+  order: number;
+}
+
+/**
+ * Article detail for single article view (GET /api/v1/articles/[id])
+ */
+export interface ArticleDetail {
+  id: string;
+  title: string;
+  chapeau: string | null;
+  excerpt: string | null;
+  category: string | null;
+  pageStart: number | null;
+  pageEnd: number | null;
+  authors: AuthorInline[];
+  featuredImage: FeaturedImage | null;
+  contentBlocks: ApiContentBlock[];
+}

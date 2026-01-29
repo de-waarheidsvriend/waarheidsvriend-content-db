@@ -70,6 +70,6 @@ development_status:
   # Epic 4: WordPress Content API
   epic-4: in-progress
   4-1-editions-api: review
-  4-2-articles-api: backlog
+  4-2-articles-api: done
   4-3-authors-images-api: backlog
   epic-4-retrospective: optional
