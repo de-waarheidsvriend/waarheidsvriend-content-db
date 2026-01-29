@@ -63,11 +63,12 @@ export function ArticleNavigation({
         onClick={onPrevious}
         disabled={!hasPrevious}
         title="Vorig artikel (←)"
+        aria-label="Ga naar vorig artikel (sneltoets: pijltje links)"
       >
         &larr; Vorige
       </Button>
 
-      <div className="flex-1 text-center min-w-0">
+      <div className="flex-1 text-center min-w-0" role="status" aria-live="polite">
         <div className="text-sm text-muted-foreground">
           Artikel {currentIndex + 1} van {totalCount}
         </div>
@@ -84,6 +85,7 @@ export function ArticleNavigation({
         onClick={onNext}
         disabled={!hasNext}
         title="Volgend artikel (→)"
+        aria-label="Ga naar volgend artikel (sneltoets: pijltje rechts)"
       >
         Volgende &rarr;
       </Button>

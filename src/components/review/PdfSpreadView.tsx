@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Image from "next/image";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageImages, type PageImage } from "@/hooks/usePageImages";
@@ -30,12 +29,12 @@ function PdfSpreadSkeleton() {
 function SpreadImage({ pageImage, alt }: { pageImage: PageImage; alt: string }) {
   return (
     <div className="relative w-full aspect-[0.707] bg-muted rounded overflow-hidden">
-      <Image
+      {/* Use img tag for dynamic uploads path - Next.js Image requires hostname config */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={pageImage.imageUrl}
         alt={alt}
-        fill
-        className="object-contain"
-        priority
+        className="w-full h-full object-contain"
       />
     </div>
   );
@@ -50,6 +49,11 @@ export function PdfSpreadView({ editionId, pageStart, pageEnd }: PdfSpreadViewPr
   const { data: pageImages, isLoading, error } = usePageImages(editionId);
   const [currentSpreadIndex, setCurrentSpreadIndex] = useState(0);
 
+  // Reset spread index when article changes (pageStart/pageEnd change)
+  useEffect(() => {
+    setCurrentSpreadIndex(0);
+  }, [pageStart, pageEnd]);
+
   // Calculate which pages are relevant for this article
   const relevantPages = useMemo(() => {
     if (!pageImages || pageStart === null) return [];
@@ -63,7 +67,8 @@ export function PdfSpreadView({ editionId, pageStart, pageEnd }: PdfSpreadViewPr
   }, [pageImages, pageStart, pageEnd]);
 
   // Group pages into spreads (pairs of pages)
-  // Page 1 is usually alone (cover), then 2-3, 4-5, etc.
+  // Magazine spreads: page 1 alone (cover), then 2-3, 4-5, etc.
+  // In a spread, even page is left, odd page is right (e.g., p2 left, p3 right)
   const spreads = useMemo(() => {
     if (relevantPages.length === 0) return [];
 
@@ -72,20 +77,33 @@ export function PdfSpreadView({ editionId, pageStart, pageEnd }: PdfSpreadViewPr
 
     while (i < relevantPages.length) {
       const page = relevantPages[i];
-      // Single page spread for odd pages or if it's the last page
-      if (page.pageNumber % 2 === 1 || i === relevantPages.length - 1) {
+      const pageNum = page.pageNumber;
+
+      // Page 1 (cover) is always alone
+      if (pageNum === 1) {
         result.push([page]);
         i++;
-      } else {
-        // Even page - look for the next odd page to pair with
+        continue;
+      }
+
+      // Even pages start a spread (left side)
+      // Odd pages > 1 complete a spread (right side) or stand alone
+      if (pageNum % 2 === 0) {
+        // Even page - look for the next odd page to form a spread
         const nextPage = relevantPages[i + 1];
-        if (nextPage && nextPage.pageNumber === page.pageNumber + 1) {
+        if (nextPage && nextPage.pageNumber === pageNum + 1) {
+          // Found matching odd page, create spread
           result.push([page, nextPage]);
           i += 2;
         } else {
+          // No matching page, show alone
           result.push([page]);
           i++;
         }
+      } else {
+        // Odd page > 1 without its even partner - show alone
+        result.push([page]);
+        i++;
       }
     }
 
@@ -174,16 +192,17 @@ export function PdfSpreadView({ editionId, pageStart, pageEnd }: PdfSpreadViewPr
 
       {/* Navigation controls */}
       {hasMultipleSpreads && (
-        <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t">
+        <nav className="flex items-center justify-center gap-4 mt-4 pt-4 border-t" aria-label="PDF spread navigatie">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCurrentSpreadIndex((i) => i - 1)}
             disabled={!canGoPrev}
+            aria-label="Ga naar vorige spread"
           >
             &larr; Vorige
           </Button>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-foreground" role="status" aria-live="polite">
             {currentSpread && getSpreadLabel(currentSpread)} ({currentSpreadIndex + 1}/{spreads.length})
           </span>
           <Button
@@ -191,10 +210,11 @@ export function PdfSpreadView({ editionId, pageStart, pageEnd }: PdfSpreadViewPr
             size="sm"
             onClick={() => setCurrentSpreadIndex((i) => i + 1)}
             disabled={!canGoNext}
+            aria-label="Ga naar volgende spread"
           >
             Volgende &rarr;
           </Button>
-        </div>
+        </nav>
       )}
 
       {/* Page indicator for single spread */}

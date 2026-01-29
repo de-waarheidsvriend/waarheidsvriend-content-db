@@ -50,21 +50,21 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Editie Upload & Content Extractie
-  epic-2: in-progress
+  epic-2: done
   2-1-upload-interface: done
   2-2-pdf-naar-images-converter: done
   2-3-xhtml-loader-structure-analyzer: done
   2-4-artikel-extractie: done
   2-5-auteur-categorie-extractie: done
-  2-6-rich-content-extractie: backlog
-  2-7-verwerkingsorkestratie: backlog
+  2-6-rich-content-extractie: done
+  2-7-verwerkingsorkestratie: done
   epic-2-retrospective: optional
 
   # Epic 3: Review Interface
-  epic-3: backlog
-  3-1-editie-overzicht: backlog
-  3-2-artikel-detail-view: backlog
-  3-3-split-view-met-pdf-navigatie: backlog
+  epic-3: done
+  3-1-editie-overzicht: done
+  3-2-artikel-detail-view: done
+  3-3-split-view-met-pdf-navigatie: done
   epic-3-retrospective: optional
 
   # Epic 4: WordPress Content API
