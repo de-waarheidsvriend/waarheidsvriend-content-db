@@ -1,6 +1,6 @@
 # Story 4.1: Editions API
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -35,35 +35,35 @@ Zodat ik weet welke content beschikbaar is voor publicatie.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Editions List Endpoint (AC: #1, #4, #5, #6, #7)
-  - [ ] 1.1 Maak `src/app/api/v1/editions/route.ts`
-  - [ ] 1.2 Implementeer GET handler met API Key validatie
-  - [ ] 1.3 Query alle edities met article count
-  - [ ] 1.4 Return consistent JSON response format
-  - [ ] 1.5 Voeg error handling toe (401 voor invalid key)
+- [x] Task 1: Editions List Endpoint (AC: #1, #4, #5, #6, #7)
+  - [x] 1.1 Maak `src/app/api/v1/editions/route.ts`
+  - [x] 1.2 Implementeer GET handler met API Key validatie
+  - [x] 1.3 Query alle edities met article count
+  - [x] 1.4 Return consistent JSON response format
+  - [x] 1.5 Voeg error handling toe (401 voor invalid key)
 
-- [ ] Task 2: Edition Detail Endpoint (AC: #2, #4, #5, #6, #7)
-  - [ ] 2.1 Maak `src/app/api/v1/editions/[id]/route.ts`
-  - [ ] 2.2 Implementeer GET handler met API Key validatie
-  - [ ] 2.3 Query editie by ID met article count
-  - [ ] 2.4 Return 404 voor niet-bestaande editie
-  - [ ] 2.5 Return consistent JSON response format
+- [x] Task 2: Edition Detail Endpoint (AC: #2, #4, #5, #6, #7)
+  - [x] 2.1 Maak `src/app/api/v1/editions/[id]/route.ts`
+  - [x] 2.2 Implementeer GET handler met API Key validatie
+  - [x] 2.3 Query editie by ID met article count
+  - [x] 2.4 Return 404 voor niet-bestaande editie
+  - [x] 2.5 Return consistent JSON response format
 
-- [ ] Task 3: Edition Articles Endpoint (AC: #3, #4, #5, #6, #7)
-  - [ ] 3.1 Maak `src/app/api/v1/editions/[id]/articles/route.ts`
-  - [ ] 3.2 Implementeer GET handler met API Key validatie
-  - [ ] 3.3 Query alle artikelen voor de editie
-  - [ ] 3.4 Include basic article fields (id, title, chapeau, category, pageStart, pageEnd)
-  - [ ] 3.5 Return 404 voor niet-bestaande editie
-  - [ ] 3.6 Return consistent JSON response format
+- [x] Task 3: Edition Articles Endpoint (AC: #3, #4, #5, #6, #7)
+  - [x] 3.1 Maak `src/app/api/v1/editions/[id]/articles/route.ts`
+  - [x] 3.2 Implementeer GET handler met API Key validatie
+  - [x] 3.3 Query alle artikelen voor de editie
+  - [x] 3.4 Include basic article fields (id, title, chapeau, category, pageStart, pageEnd)
+  - [x] 3.5 Return 404 voor niet-bestaande editie
+  - [x] 3.6 Return consistent JSON response format
 
-- [ ] Task 4: Tests schrijven
-  - [ ] 4.1 Unit tests voor `/api/v1/editions` endpoint
-  - [ ] 4.2 Unit tests voor `/api/v1/editions/[id]` endpoint
-  - [ ] 4.3 Unit tests voor `/api/v1/editions/[id]/articles` endpoint
-  - [ ] 4.4 Test API Key validatie (valid, invalid, missing)
-  - [ ] 4.5 Test error responses (401, 404)
-  - [ ] 4.6 Test response format consistency
+- [x] Task 4: Tests schrijven
+  - [x] 4.1 Unit tests voor `/api/v1/editions` endpoint
+  - [x] 4.2 Unit tests voor `/api/v1/editions/[id]` endpoint
+  - [x] 4.3 Unit tests voor `/api/v1/editions/[id]/articles` endpoint
+  - [x] 4.4 Test API Key validatie (valid, invalid, missing)
+  - [x] 4.5 Test error responses (401, 404)
+  - [x] 4.6 Test response format consistency
 
 ## Dev Notes
 
@@ -231,16 +231,56 @@ Geen nieuwe npm dependencies. Hergebruikt:
 
 ### Agent Model Used
 
-(To be filled after implementation)
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Completion Notes List
 
-(To be filled after implementation)
+1. **Editions List Endpoint** (`GET /api/v1/editions`):
+   - Implemented with X-API-Key header validation using existing `validateApiKey` middleware
+   - Returns all editions ordered by edition_date descending
+   - Response includes: id, editionNumber, editionDate (ISO), articleCount, status
+   - Consistent JSON format: `{ success: true, data: [...] }`
+   - 401 Unauthorized for invalid/missing API key
+   - 500 Internal Error with proper error code for database failures
+
+2. **Edition Detail Endpoint** (`GET /api/v1/editions/[id]`):
+   - API Key validation on all requests
+   - ID validation (numeric, positive integer)
+   - 400 Bad Request for invalid ID format
+   - 404 Not Found for non-existent edition
+   - Returns single edition with same fields as list endpoint
+
+3. **Edition Articles Endpoint** (`GET /api/v1/editions/[id]/articles`):
+   - API Key validation on all requests
+   - Checks edition exists before querying articles
+   - 404 Not Found if edition doesn't exist
+   - Returns articles ordered by page_start ascending
+   - Article fields: id, title, chapeau, category, pageStart, pageEnd
+
+4. **Tests** (33 total tests across 3 test files):
+   - API Key validation tests (missing, invalid, valid)
+   - ID validation tests (non-numeric, negative, zero)
+   - Success response format tests
+   - Error handling tests (database failures)
+   - REST convention compliance tests
+
+5. **All 455 project tests pass** - no regressions introduced
 
 ### File List
 
-(To be filled after implementation)
+**Created:**
+- `src/app/api/v1/editions/route.ts`
+- `src/app/api/v1/editions/route.test.ts`
+- `src/app/api/v1/editions/[id]/route.ts`
+- `src/app/api/v1/editions/[id]/route.test.ts`
+- `src/app/api/v1/editions/[id]/articles/route.ts`
+- `src/app/api/v1/editions/[id]/articles/route.test.ts`
+
+**Modified:**
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/4-1-editions-api.md`
 
 ## Change Log
 
 - 2026-01-29: Story file created, status set to ready-for-dev
+- 2026-01-29: Implementation complete, all endpoints created with tests, status set to review
