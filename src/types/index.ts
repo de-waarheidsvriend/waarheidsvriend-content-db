@@ -118,7 +118,7 @@ export interface XhtmlExport {
  * Body content block with type indicator
  */
 export interface BodyBlock {
-  type: "paragraph" | "streamer" | "subheading";
+  type: "intro" | "paragraph" | "streamer" | "subheading";
   content: string;
 }
 

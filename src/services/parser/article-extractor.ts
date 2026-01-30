@@ -452,6 +452,7 @@ function finalizeGroup(
  *
  * Processes content elements in document order, keeping streamers/subheadings
  * as single blocks while merging consecutive body paragraphs.
+ * The first paragraph is marked as "intro".
  */
 function buildBodyBlocks(
   elements: ArticleElement[],
@@ -459,12 +460,16 @@ function buildBodyBlocks(
 ): BodyBlock[] {
   const blocks: BodyBlock[] = [];
   let bodyBuffer: ArticleElement[] = [];
+  let firstParagraphSeen = false;
 
   const flushBodyBuffer = () => {
     if (bodyBuffer.length > 0) {
       const paragraphs = mergeBodyParagraphs(bodyBuffer, defaultCharOverride);
       for (const content of paragraphs) {
-        blocks.push({ type: "paragraph", content });
+        // First paragraph becomes "intro", rest are "paragraph"
+        const type = !firstParagraphSeen ? "intro" : "paragraph";
+        blocks.push({ type, content });
+        firstParagraphSeen = true;
       }
       bodyBuffer = [];
     }
@@ -637,9 +642,9 @@ function buildExtractedArticle(
   // Build body paragraphs with streamers/subheadings in correct position
   const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride);
 
-  // First paragraph block is the intro
-  const firstParagraph = bodyParagraphs.find((b) => b.type === "paragraph");
-  const intro = firstParagraph ? firstParagraph.content : null;
+  // First block with type "intro" provides the intro content
+  const introBlock = bodyParagraphs.find((b) => b.type === "intro");
+  const intro = introBlock ? introBlock.content : null;
 
   // Generate excerpt from content
   const excerpt = content ? generateExcerpt(content, 150) : null;
