@@ -451,10 +451,11 @@ function groupElementsIntoArticles(
         endMarkerPage = element.pageStart; // Remember page for trailing author-bio
       }
     } else if (articleComplete) {
-      // After ■: author-related elements and images on the SAME PAGE go to the LAST saved article
-      // (author-bio, author names, and author photo often appear visually below ■ but belong to the article)
+      // After ■: author-related elements, images, streamers, and sidebars on the SAME PAGE go to the LAST saved article
+      // (these elements often appear visually below ■ but belong to the article)
       if (
-        (element.type === "author-bio" || element.type === "author" || element.type === "image") &&
+        (element.type === "author-bio" || element.type === "author" || element.type === "image" ||
+         element.type === "streamer" || element.type === "sidebar") &&
         element.pageStart === endMarkerPage
       ) {
         // Add to the last saved article
