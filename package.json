@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "publish:wp": "tsx scripts/publish-to-wp.ts"
+    "publish:wp": "tsx scripts/publish-to-wp.ts",
+    "reparse": "tsx scripts/reparse-edition.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",
