@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArticleList } from "@/components/editions/ArticleList";
+import { PublishButton } from "@/components/editions/PublishButton";
 import { useEdition } from "@/hooks/useEditions";
 
 interface EditionDetailPageProps {
@@ -87,6 +88,32 @@ function EditionHeader({ editionId }: { editionId: number }) {
   );
 }
 
+function EditionActions({ editionId }: { editionId: number }) {
+  const { data: edition, isLoading } = useEdition(editionId);
+
+  const canPublish =
+    edition?.status === "completed" || edition?.status === "completed_with_errors";
+  const articleCount = edition?.articles.length ?? 0;
+
+  return (
+    <div className="flex gap-2 flex-wrap items-center">
+      {canPublish && (
+        <PublishButton
+          editionId={editionId}
+          articleCount={articleCount}
+          disabled={isLoading}
+        />
+      )}
+      <Link href={`/review/${editionId}`}>
+        <Button>Review starten</Button>
+      </Link>
+      <Link href="/editions">
+        <Button variant="outline">Terug naar overzicht</Button>
+      </Link>
+    </div>
+  );
+}
+
 export default function EditionDetailPage({ params }: EditionDetailPageProps) {
   const { id } = use(params);
   const editionId = parseInt(id, 10);
@@ -104,16 +131,9 @@ export default function EditionDetailPage({ params }: EditionDetailPageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <EditionHeader editionId={editionId} />
-        <div className="flex gap-2">
-          <Link href={`/review/${editionId}`}>
-            <Button>Review starten</Button>
-          </Link>
-          <Link href="/editions">
-            <Button variant="outline">Terug naar overzicht</Button>
-          </Link>
-        </div>
+        <EditionActions editionId={editionId} />
       </div>
       <div>
         <h2 className="text-xl font-semibold mb-4">Artikelen</h2>
