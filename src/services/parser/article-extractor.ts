@@ -298,6 +298,24 @@ function hasBodyContent(elements: ArticleElement[]): boolean {
 }
 
 /**
+ * Check if the last semantic content in the article is a chapeau
+ * (ignoring author/image elements which can appear at the end)
+ * This indicates a potential new article start
+ */
+function lastContentIsChapeau(elements: ArticleElement[]): boolean {
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const el = elements[i];
+    // Skip non-content elements
+    if (el.type === "author" || el.type === "author-bio" || el.type === "image") {
+      continue;
+    }
+    // Found content - check if it's a chapeau
+    return el.type === "chapeau";
+  }
+  return false;
+}
+
+/**
  * Group extracted elements into articles using title→■ boundaries
  *
  * Article structure:
@@ -322,6 +340,7 @@ function groupElementsIntoArticles(
   let inMemoriamMode = false; // Track if we're in an "In memoriam" compound title
   let articleComplete = false; // Track if we've seen the ■ marker
   let endMarkerPage = -1; // Page where ■ was found (for trailing author-bio)
+  let awaitingTitle = false; // Track if we're collecting pre-title elements after ■
 
   for (const element of elements) {
     // Skip cover elements - they're handled separately
@@ -332,16 +351,45 @@ function groupElementsIntoArticles(
     if (element.type === "title") {
       const titleText = htmlToPlainText(element.content);
 
+      // Check if last saved article has no title and is on same/adjacent page
+      // This handles cases where body+■ comes before title in DOM order (e.g., columns)
+      if (articleComplete && articles.length > 0) {
+        const lastArticle = articles[articles.length - 1];
+        const lastArticleHasTitle = lastArticle.some(el => el.type === "title");
+        const lastArticlePage = lastArticle[0]?.pageStart;
+
+        if (!lastArticleHasTitle && Math.abs(element.pageStart - lastArticlePage) <= 1) {
+          // Add title to the last article (body came before title in DOM)
+          // The article already has ■ so it's complete - just add the title and leave it saved
+          lastArticle.unshift(element); // Add at beginning
+          // Reset state for next article
+          currentArticle = [];
+          articleComplete = false;
+          awaitingTitle = false;
+          endMarkerPage = -1;
+          pendingCategory = null;
+          continue;
+        }
+      }
+
       // Check if this is the start of an "In memoriam" article
       if (isInMemoriamTitle(element.content)) {
         // Start new "In memoriam" article
-        if (currentArticle.length > 0) {
+        if (currentArticle.length > 0 && !awaitingTitle) {
           articles.push(currentArticle);
         }
-        currentArticle = pendingCategory ? [pendingCategory, element] : [element];
+        // Include any pre-title elements collected after ■
+        if (awaitingTitle) {
+          currentArticle = pendingCategory
+            ? [pendingCategory, ...currentArticle, element]
+            : [...currentArticle, element];
+        } else {
+          currentArticle = pendingCategory ? [pendingCategory, element] : [element];
+        }
         pendingCategory = null;
         inMemoriamMode = true; // Enable compound title mode
         articleComplete = false;
+        awaitingTitle = false;
         endMarkerPage = -1;
       }
       // Check if we're continuing an "In memoriam" compound title
@@ -353,38 +401,71 @@ function groupElementsIntoArticles(
           inMemoriamMode = false;
         }
       }
-      // Normal title - starts a new article
+      // Normal title
       else {
-        if (currentArticle.length > 0) {
-          articles.push(currentArticle);
+        // Check if currentArticle has content but no title yet (body before title case)
+        const currentArticleHasTitle = currentArticle.some(el => el.type === "title");
+
+        // Start new article if:
+        // 1. No current article yet
+        // 2. Previous article is complete (■ marker seen, waiting for trailing elements)
+        // 3. We're collecting pre-title elements after ■ (chapeau, category, etc.)
+        // 4. Current article has content but no title yet (body appeared before title)
+        if (currentArticle.length === 0 || articleComplete || awaitingTitle || !currentArticleHasTitle) {
+          if (currentArticle.length > 0 && !awaitingTitle && currentArticleHasTitle) {
+            // Only save if we're not awaiting a title AND current already has a title
+            articles.push(currentArticle);
+            currentArticle = [];
+          }
+          // Start new article with any pre-title elements (chapeau, etc.) plus this title
+          // Or add title to existing pre-title content
+          if (pendingCategory) {
+            currentArticle = [pendingCategory, ...currentArticle, element];
+            pendingCategory = null;
+          } else if (currentArticle.length > 0 && !currentArticleHasTitle) {
+            // Add title at the beginning of existing content
+            currentArticle.unshift(element);
+          } else {
+            currentArticle.push(element);
+          }
+          articleComplete = false;
+          awaitingTitle = false;
+          endMarkerPage = -1;
+        } else {
+          // Article already has a title and no ■ marker yet - treat as subtitle
+          currentArticle.push(element);
         }
-        currentArticle = pendingCategory ? [pendingCategory, element] : [element];
-        pendingCategory = null;
         inMemoriamMode = false;
-        articleComplete = false;
-        endMarkerPage = -1;
       }
     } else if (element.type === "category" && currentArticle.length === 0) {
       // Category before any title - hold it for the next article
       pendingCategory = element;
     } else if (element.type === "article-end") {
-      // ■ marker - include it, article content is complete
+      // ■ marker - save article immediately so currentArticle is ready for next article
       if (currentArticle.length > 0) {
         currentArticle.push(element);
+        articles.push(currentArticle);  // Save immediately
+        currentArticle = [];            // Reset for next article
         inMemoriamMode = false;
         articleComplete = true;
         endMarkerPage = element.pageStart; // Remember page for trailing author-bio
       }
     } else if (articleComplete) {
-      // After ■: accept author-bio and images on the SAME PAGE as the ■ marker
-      // (author-bio and author photo often appear visually below ■ but belong to the article)
+      // After ■: author-related elements and images on the SAME PAGE go to the LAST saved article
+      // (author-bio, author names, and author photo often appear visually below ■ but belong to the article)
       if (
-        (element.type === "author-bio" || element.type === "image") &&
+        (element.type === "author-bio" || element.type === "author" || element.type === "image") &&
         element.pageStart === endMarkerPage
       ) {
+        // Add to the last saved article
+        articles[articles.length - 1].push(element);
+      } else {
+        // All other elements: start collecting for next article
+        // Mark that we're awaiting a title to properly start the article
+        articleComplete = false;
+        awaitingTitle = true;
         currentArticle.push(element);
       }
-      // All other elements are ignored until next title
     } else {
       // Before ■: all elements belong to current article
       if (currentArticle.length > 0) {
@@ -393,8 +474,22 @@ function groupElementsIntoArticles(
         if (element.type === "body" || element.type === "chapeau") {
           inMemoriamMode = false;
         }
+      } else if (
+        element.type === "body" ||
+        element.type === "chapeau" ||
+        element.type === "author-bio" ||
+        element.type === "subheading" ||
+        element.type === "streamer"
+      ) {
+        // Content before title - start article anyway (handles columns where body comes before title)
+        // Include any pending category
+        if (pendingCategory) {
+          currentArticle.push(pendingCategory);
+          pendingCategory = null;
+        }
+        currentArticle.push(element);
       }
-      // If no current article, this is orphan content - skip it
+      // If no current article and not content, this is orphan content - skip it
     }
   }
 
@@ -672,6 +767,7 @@ function buildExtractedArticle(
 
   // Check for "In memoriam" compound title structure
   let title: string;
+  let subtitle: string | null = null;
   let lifespan: string | null = null;
   let inMemoriamCategory = false;
 
@@ -691,6 +787,11 @@ function buildExtractedArticle(
   } else {
     // Normal article - use first title
     title = firstTitleText;
+
+    // If there are additional titles (not lifespan), the second one is a subtitle
+    if (titleElements.length >= 2 && !isLifespanTitle(titleElements[1].content)) {
+      subtitle = htmlToPlainText(titleElements[1].content);
+    }
   }
 
   if (!title) {
@@ -854,6 +955,7 @@ function buildExtractedArticle(
 
   return {
     title,
+    subtitle,
     chapeau,
     bodyParagraphs,
     content,
