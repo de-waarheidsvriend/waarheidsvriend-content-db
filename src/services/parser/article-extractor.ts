@@ -965,17 +965,19 @@ function buildExtractedArticle(
     return true; // Keep streamers, subheadings, and questions
   });
 
-  // Build HTML content from body elements only (for legacy content field)
-  const bodyOnlyElements = filteredContentElements.filter((el) => el.type === "body");
-  const bodyHtml = bodyOnlyElements.map((el) => el.content).join("\n");
-  const content = cleanHtml(bodyHtml);
-
   // Detect the default CharOverride (most common across all body elements)
+  const bodyOnlyElements = filteredContentElements.filter((el) => el.type === "body");
   const allBodyHtml = bodyOnlyElements.map((el) => el.content).join("");
   const defaultCharOverride = getDominantCharOverride(allBodyHtml);
 
   // Build body paragraphs with streamers/subheadings in correct position
   const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride, charOverrideStyles);
+
+  // Build HTML content from body paragraphs (clean semantic HTML)
+  const bodyParagraphContents = bodyParagraphs
+    .filter((b) => b.type === "intro" || b.type === "paragraph")
+    .map((b) => `<p>${b.content}</p>`);
+  const content = bodyParagraphContents.join("\n");
 
   // Calculate page range
   const pageStarts = elements.map((el) => el.pageStart);
