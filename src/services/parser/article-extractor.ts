@@ -15,6 +15,7 @@ import {
   htmlToSemanticHtml,
   isFooterContent,
   getDominantCharOverride,
+  getYRange,
 } from "./html-cleaner";
 
 /**
@@ -227,7 +228,9 @@ function extractElementsFromSpread(
       type = "title";
     } else if (chapeauSelector && $el.is(chapeauSelector)) {
       type = "chapeau";
-    } else if (bodySelector && $el.is(bodySelector)) {
+    } else if (bodySelector && $el.is(bodySelector) && tagName !== "div") {
+      // Only match p elements for body - div containers like Basistekstkader
+      // contain child p elements that have the actual content
       type = "body";
     } else if (authorSelector && $el.is(authorSelector)) {
       type = "author";
@@ -238,6 +241,9 @@ function extractElementsFromSpread(
 
     // Add classified elements (InDesign exports in reading order, no sorting needed)
     if (type !== "unknown") {
+      // Extract Y-positions for paragraph gap detection
+      const yRange = getYRange(html);
+
       elements.push({
         type,
         content: html,
@@ -245,6 +251,8 @@ function extractElementsFromSpread(
         spreadIndex: spread.spreadIndex,
         pageStart: spread.pageStart,
         pageEnd: spread.pageEnd,
+        yStart: yRange?.yStart,
+        yEnd: yRange?.yEnd,
       });
     }
 
@@ -266,6 +274,30 @@ function extractElementsFromSpread(
 }
 
 /**
+ * Check if a title indicates an "In memoriam" article
+ */
+function isInMemoriamTitle(content: string): boolean {
+  const text = htmlToPlainText(content).toLowerCase();
+  return text.includes("in memoriam");
+}
+
+/**
+ * Check if a title looks like a lifespan (e.g., "1938-2026")
+ */
+function isLifespanTitle(content: string): boolean {
+  const text = htmlToPlainText(content);
+  // Match patterns like "1938-2026", "1938 - 2026", "1938–2026"
+  return /^\d{4}\s*[-–]\s*\d{4}$/.test(text.trim());
+}
+
+/**
+ * Check if current article has substantial body content
+ */
+function hasBodyContent(elements: ArticleElement[]): boolean {
+  return elements.some((el) => el.type === "body" || el.type === "chapeau");
+}
+
+/**
  * Group extracted elements into articles using title→■ boundaries
  *
  * Article structure:
@@ -275,6 +307,10 @@ function extractElementsFromSpread(
  *   (these often appear after ■ in visual order but belong to the article)
  * - Article fully ends at next title or body content after ■
  *
+ * Special handling for "In memoriam" articles:
+ * - "In memoriam" + name + lifespan are grouped as one article
+ * - "In memoriam" becomes the category, name becomes title, lifespan is extracted
+ *
  * Cover elements are skipped as they're handled separately.
  */
 function groupElementsIntoArticles(
@@ -283,7 +319,9 @@ function groupElementsIntoArticles(
   const articles: ArticleElement[][] = [];
   let currentArticle: ArticleElement[] = [];
   let pendingCategory: ArticleElement | null = null;
-  let afterEndMarker = false; // Track if we've passed ■
+  let inMemoriamMode = false; // Track if we're in an "In memoriam" compound title
+  let articleComplete = false; // Track if we've seen the ■ marker
+  let endMarkerPage = -1; // Page where ■ was found (for trailing author-bio)
 
   for (const element of elements) {
     // Skip cover elements - they're handled separately
@@ -292,39 +330,69 @@ function groupElementsIntoArticles(
     }
 
     if (element.type === "title") {
-      // Title starts a new article
-      if (currentArticle.length > 0) {
-        // Save previous article
-        articles.push(currentArticle);
+      const titleText = htmlToPlainText(element.content);
+
+      // Check if this is the start of an "In memoriam" article
+      if (isInMemoriamTitle(element.content)) {
+        // Start new "In memoriam" article
+        if (currentArticle.length > 0) {
+          articles.push(currentArticle);
+        }
+        currentArticle = pendingCategory ? [pendingCategory, element] : [element];
+        pendingCategory = null;
+        inMemoriamMode = true; // Enable compound title mode
+        articleComplete = false;
+        endMarkerPage = -1;
       }
-      // Start new article - include pending category if any
-      currentArticle = pendingCategory ? [pendingCategory, element] : [element];
-      pendingCategory = null;
-      afterEndMarker = false;
+      // Check if we're continuing an "In memoriam" compound title
+      else if (inMemoriamMode && !hasBodyContent(currentArticle)) {
+        // This is the name or lifespan part of "In memoriam"
+        currentArticle.push(element);
+        // If this is a lifespan, we're done with compound title mode
+        if (isLifespanTitle(element.content)) {
+          inMemoriamMode = false;
+        }
+      }
+      // Normal title - starts a new article
+      else {
+        if (currentArticle.length > 0) {
+          articles.push(currentArticle);
+        }
+        currentArticle = pendingCategory ? [pendingCategory, element] : [element];
+        pendingCategory = null;
+        inMemoriamMode = false;
+        articleComplete = false;
+        endMarkerPage = -1;
+      }
     } else if (element.type === "category" && currentArticle.length === 0) {
       // Category before any title - hold it for the next article
       pendingCategory = element;
     } else if (element.type === "article-end") {
-      // ■ marker - include it and mark that we're in "trailing" mode
+      // ■ marker - include it, article content is complete
       if (currentArticle.length > 0) {
         currentArticle.push(element);
-        afterEndMarker = true;
+        inMemoriamMode = false;
+        articleComplete = true;
+        endMarkerPage = element.pageStart; // Remember page for trailing author-bio
       }
-    } else if (afterEndMarker) {
-      // After ■: only collect author-bio, author, and streamer elements
-      // These often appear visually below ■ but belong to the article
-      if (element.type === "author-bio" || element.type === "author" || element.type === "streamer") {
+    } else if (articleComplete) {
+      // After ■: accept author-bio and images on the SAME PAGE as the ■ marker
+      // (author-bio and author photo often appear visually below ■ but belong to the article)
+      if (
+        (element.type === "author-bio" || element.type === "image") &&
+        element.pageStart === endMarkerPage
+      ) {
         currentArticle.push(element);
-      } else if (element.type === "body" || element.type === "chapeau" || element.type === "subheading") {
-        // Body/chapeau/subheading after ■ means we've moved to next article content
-        // Don't include this element, it belongs to the next article
-        // (but don't start a new article yet - wait for title)
       }
-      // Other element types (image, caption, etc.) after ■ are ignored
+      // All other elements are ignored until next title
     } else {
       // Before ■: all elements belong to current article
       if (currentArticle.length > 0) {
         currentArticle.push(element);
+        // Once we have body content, exit compound title mode
+        if (element.type === "body" || element.type === "chapeau") {
+          inMemoriamMode = false;
+        }
       }
       // If no current article, this is orphan content - skip it
     }
@@ -339,13 +407,38 @@ function groupElementsIntoArticles(
 }
 
 /**
- * Merge consecutive body elements into logical paragraphs
+ * Threshold for Y-gap between paragraphs (in pixels)
+ * - Gap <= threshold: same paragraph (merge with line break)
+ * - Gap > threshold: new paragraph (separate block)
+ *
+ * Typical InDesign line height is ~250px, paragraph gap is ~400-500px
+ */
+const GAP_THRESHOLD = 350;
+
+/**
+ * Check if a new paragraph should start based on Y-gap
+ */
+function shouldStartNewParagraph(
+  prevElement: ArticleElement,
+  currElement: ArticleElement
+): boolean {
+  // If no Y-positions available, use default behavior (separate paragraphs)
+  if (prevElement.yEnd === undefined || currElement.yStart === undefined) {
+    return true;
+  }
+  const gap = currElement.yStart - prevElement.yEnd;
+  return gap > GAP_THRESHOLD;
+}
+
+/**
+ * Merge consecutive body elements into logical paragraphs based on Y-gap
  *
  * InDesign single-page exports split logical paragraphs into multiple <p> elements.
- * This function intelligently merges them:
- * - Elements with different CharOverride (styling) are kept separate
- * - Verse-like content (short lines, italic, no sentence-ending punctuation) is merged
- * - Prose paragraphs (ending with . ! ?) stay separate
+ * This function uses Y-position gaps to determine paragraph boundaries:
+ * - Small gap (<=350px): Same paragraph, merge with line break
+ * - Large gap (>350px): New paragraph (visual whitespace in source)
+ *
+ * Elements with different CharOverride (styling) are always kept separate.
  *
  * @param elements - Body elements to merge
  * @param defaultCharOverride - The CharOverride class used for normal text
@@ -361,11 +454,9 @@ function mergeBodyParagraphs(
   let currentGroup: ArticleElement[] = [];
   let currentOverride: string | null = null;
 
-  for (const el of elements) {
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i];
     const override = getDominantCharOverride(el.content);
-    const text = htmlToPlainText(el.content);
-    const isShortLine = text.length < 80;
-    const endsWithSentence = /[.!?:]["']?\s*$/.test(text);
 
     if (currentGroup.length === 0) {
       // Start new group
@@ -376,18 +467,17 @@ function mergeBodyParagraphs(
       paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
       currentGroup = [el];
       currentOverride = override;
-    } else if (override !== defaultCharOverride) {
-      // Non-default styling (e.g. italic) - merge into verse
-      currentGroup.push(el);
-    } else if (isShortLine && !endsWithSentence) {
-      // Short line without sentence ending - might be continuation
-      currentGroup.push(el);
     } else {
-      // Normal prose ending with sentence - finalize and start new
-      currentGroup.push(el);
-      paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
-      currentGroup = [];
-      currentOverride = null;
+      // Same styling - check Y-gap
+      const prevEl = currentGroup[currentGroup.length - 1];
+      if (shouldStartNewParagraph(prevEl, el)) {
+        // Large gap - finalize current group and start new one
+        paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+        currentGroup = [el];
+      } else {
+        // Small gap - continue current group (will be merged with line break)
+        currentGroup.push(el);
+      }
     }
   }
 
@@ -400,7 +490,11 @@ function mergeBodyParagraphs(
 }
 
 /**
- * Finalize a group of elements into paragraph(s)
+ * Finalize a group of elements into a single paragraph
+ *
+ * Elements in a group have small Y-gaps and should be merged.
+ * For italic content (verses), line breaks are preserved between elements.
+ * For prose, line breaks are removed (they come from column widths in print).
  */
 function finalizeGroup(
   elements: ArticleElement[],
@@ -409,7 +503,7 @@ function finalizeGroup(
   if (elements.length === 0) return [];
 
   const override = getDominantCharOverride(elements[0].content);
-  const isItalic = override !== defaultCharOverride;
+  const isItalic = override !== null && override !== defaultCharOverride;
 
   // Convert all elements to semantic HTML
   const texts = elements.map((el) =>
@@ -417,33 +511,13 @@ function finalizeGroup(
   );
 
   if (isItalic) {
-    // Italic content (verse) - merge with line breaks
+    // Verse: preserve line breaks per regel
     return [texts.join("\n")];
   }
 
-  // Normal prose - each sentence-ending element is its own paragraph
-  // But short lines without sentence endings get merged with the next
-  const result: string[] = [];
-  let buffer: string[] = [];
-
-  for (let i = 0; i < texts.length; i++) {
-    const text = texts[i];
-    const plainText = htmlToPlainText(elements[i].content);
-    const endsWithSentence = /[.!?:]["']?\s*$/.test(plainText);
-
-    buffer.push(text);
-
-    if (endsWithSentence || i === texts.length - 1) {
-      result.push(buffer.join(" "));
-      buffer = [];
-    }
-  }
-
-  if (buffer.length > 0) {
-    result.push(buffer.join(" "));
-  }
-
-  return result;
+  // Prose: join with spaces, remove internal line breaks
+  const joined = texts.join(" ");
+  return [joined.replace(/\n/g, " ").replace(/\s+/g, " ").trim()];
 }
 
 /**
@@ -452,20 +526,23 @@ function finalizeGroup(
  * Processes content elements in document order, keeping streamers/subheadings
  * as single blocks while merging consecutive body paragraphs.
  * The first paragraph is marked as "intro".
+ * Sidebars (and their preceding titles) are collected and appended at the end
+ * to avoid interrupting the flow of body text.
  */
 function buildBodyBlocks(
   elements: ArticleElement[],
   defaultCharOverride: string | null
 ): BodyBlock[] {
   const blocks: BodyBlock[] = [];
+  const sidebars: BodyBlock[] = []; // Collect sidebars to append at end
   let bodyBuffer: ArticleElement[] = [];
   let firstParagraphSeen = false;
+  let pendingSubheading: BodyBlock | null = null; // Hold subheading to check if it belongs to a sidebar
 
   const flushBodyBuffer = () => {
     if (bodyBuffer.length > 0) {
       const paragraphs = mergeBodyParagraphs(bodyBuffer, defaultCharOverride);
       for (const content of paragraphs) {
-        // First paragraph becomes "intro", rest are "paragraph"
         const type = !firstParagraphSeen ? "intro" : "paragraph";
         blocks.push({ type, content });
         firstParagraphSeen = true;
@@ -474,26 +551,52 @@ function buildBodyBlocks(
     }
   };
 
+  const flushPendingSubheading = () => {
+    if (pendingSubheading) {
+      blocks.push(pendingSubheading);
+      pendingSubheading = null;
+    }
+  };
+
   for (const el of elements) {
     if (el.type === "streamer") {
       flushBodyBuffer();
+      flushPendingSubheading();
       blocks.push({
         type: "streamer",
         content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
       });
     } else if (el.type === "subheading") {
       flushBodyBuffer();
-      blocks.push({
+      flushPendingSubheading();
+      // Hold this subheading - if next element is sidebar, they go together
+      pendingSubheading = {
         type: "subheading",
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
+      };
+    } else if (el.type === "sidebar") {
+      flushBodyBuffer();
+      // If there's a pending subheading, it's the sidebar's title - move both to end
+      if (pendingSubheading) {
+        sidebars.push(pendingSubheading);
+        pendingSubheading = null;
+      }
+      sidebars.push({
+        type: "sidebar",
         content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
       });
     } else if (el.type === "body") {
+      flushPendingSubheading();
       bodyBuffer.push(el);
     }
   }
 
-  // Flush remaining body elements
+  // Flush remaining elements
   flushBodyBuffer();
+  flushPendingSubheading();
+
+  // Append sidebars at the end
+  blocks.push(...sidebars);
 
   return blocks;
 }
@@ -552,18 +655,44 @@ function cleanAuthorNames(rawNames: string[]): string[] {
  *
  * With title→■ boundaries, all elements between are guaranteed to belong
  * to this article. No proximity checks needed.
+ *
+ * Special handling for "In memoriam" articles:
+ * - First title "In memoriam" becomes category
+ * - Second title (name) becomes the article title
+ * - Third title with year pattern (e.g., "1938-2026") becomes lifespan
  */
 function buildExtractedArticle(
   elements: ArticleElement[]
 ): ExtractedArticle | null {
   // Must have at least a title
-  const titleElement = elements.find((el) => el.type === "title");
-  if (!titleElement) {
+  const titleElements = elements.filter((el) => el.type === "title");
+  if (titleElements.length === 0) {
     return null;
   }
 
-  // Extract title text
-  const title = htmlToPlainText(titleElement.content);
+  // Check for "In memoriam" compound title structure
+  let title: string;
+  let lifespan: string | null = null;
+  let inMemoriamCategory = false;
+
+  const firstTitleText = htmlToPlainText(titleElements[0].content);
+
+  if (isInMemoriamTitle(titleElements[0].content) && titleElements.length >= 2) {
+    // "In memoriam" article structure
+    inMemoriamCategory = true;
+
+    // Second title is the person's name
+    title = htmlToPlainText(titleElements[1].content);
+
+    // Third title (if present and matches pattern) is the lifespan
+    if (titleElements.length >= 3 && isLifespanTitle(titleElements[2].content)) {
+      lifespan = htmlToPlainText(titleElements[2].content).trim();
+    }
+  } else {
+    // Normal article - use first title
+    title = firstTitleText;
+  }
+
   if (!title) {
     return null;
   }
@@ -582,11 +711,15 @@ function buildExtractedArticle(
     ? htmlToPlainText(verseReferenceElement.content)
     : null;
 
-  // Extract category - first try explicit category element
-  const categoryElement = elements.find((el) => el.type === "category");
-  let category = categoryElement
-    ? htmlToPlainText(categoryElement.content)
-    : null;
+  // Extract category - "In memoriam" takes precedence, then explicit category element
+  let category: string | null = inMemoriamCategory ? "In memoriam" : null;
+
+  if (!category) {
+    const categoryElement = elements.find((el) => el.type === "category");
+    category = categoryElement
+      ? htmlToPlainText(categoryElement.content)
+      : null;
+  }
 
   // If no explicit category, detect from class name keywords
   if (!category) {
@@ -617,16 +750,18 @@ function buildExtractedArticle(
   // Clean and deduplicate author names
   const authorNames = cleanAuthorNames(rawAuthorNames);
 
-  // Get all content elements (body, streamer, subheading) in document order
+  // Get all content elements (body, streamer, subheading, sidebar) in document order
   const contentElements = elements.filter((el) =>
-    el.type === "body" || el.type === "streamer" || el.type === "subheading"
+    el.type === "body" || el.type === "streamer" || el.type === "subheading" || el.type === "sidebar"
   );
 
-  // Filter out header/footer content from body elements
+  // Filter out header/footer content from body and sidebar elements
   const filteredContentElements = contentElements.filter((el) => {
-    if (el.type !== "body") return true; // Keep streamers and subheadings
-    const text = htmlToPlainText(el.content);
-    return !isFooterContent(text);
+    if (el.type === "body" || el.type === "sidebar") {
+      const text = htmlToPlainText(el.content);
+      return !isFooterContent(text);
+    }
+    return true; // Keep streamers and subheadings
   });
 
   // Build HTML content from body elements only (for legacy content field)
@@ -723,6 +858,7 @@ function buildExtractedArticle(
     bodyParagraphs,
     content,
     category,
+    lifespan,
     verseReference,
     authorBio,
     pageStart,

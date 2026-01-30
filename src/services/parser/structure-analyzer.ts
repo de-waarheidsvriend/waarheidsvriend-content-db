@@ -107,8 +107,9 @@ export function classifyClassName(className: string): string | null {
   }
 
   // Sidebar/kader patterns (check before body since kadertekst contains "tekst")
+  // Exclude "basistekst" - these are body text classes despite containing "kader"
   if (
-    lowerName.includes("kader") ||
+    (lowerName.includes("kader") && !lowerName.includes("basistekst")) ||
     lowerName.includes("sidebar") ||
     lowerName.includes("inzet") ||
     lowerName.includes("box")
@@ -131,9 +132,10 @@ export function classifyClassName(className: string): string | null {
   }
 
   // Chapeau/intro patterns (excluding cover and verse patterns)
+  // Exclude "introletter" - that's a drop cap style, not intro text
   if (
     (lowerName.includes("chapeau") && !lowerName.includes("omslag")) ||
-    (lowerName.includes("intro") && !lowerName.includes("boven-vers")) ||
+    (lowerName.includes("intro") && !lowerName.includes("boven-vers") && !lowerName.includes("introletter")) ||
     (lowerName.includes("ankeiler") && !lowerName.includes("omslag"))
   ) {
     return "chapeau";
