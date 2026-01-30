@@ -1,4 +1,6 @@
 import * as cheerio from "cheerio";
+import { readFile, readdir } from "fs/promises";
+import { join } from "path";
 import type { PrismaClient, Article } from "@prisma/client";
 import type {
   XhtmlExport,
@@ -16,12 +18,91 @@ import {
   isFooterContent,
   getDominantCharOverride,
   getYRange,
+  parseCharOverrideStyles,
+  type CharOverrideStyles,
 } from "./html-cleaner";
 
 /**
  * The article end marker character used by InDesign exports
  */
 const ARTICLE_END_MARKER = "■";
+
+/**
+ * Find the CSS directory in an XHTML export
+ * Handles both direct structure and nested folder structure
+ */
+async function findCssDir(xhtmlDir: string): Promise<string | null> {
+  // First, try the direct path
+  const directPath = join(xhtmlDir, "publication-web-resources", "css");
+  try {
+    await readdir(directPath);
+    return directPath;
+  } catch {
+    // Not found directly, look for a content subfolder
+  }
+
+  // Look for a content subfolder (excluding __MACOSX)
+  try {
+    const entries = await readdir(xhtmlDir);
+    for (const entry of entries) {
+      if (entry === "__MACOSX" || String(entry).startsWith(".")) continue;
+      const subPath = join(
+        xhtmlDir,
+        String(entry),
+        "publication-web-resources",
+        "css"
+      );
+      try {
+        await readdir(subPath);
+        return subPath;
+      } catch {
+        // This subfolder doesn't have the expected structure
+      }
+    }
+  } catch {
+    // xhtmlDir doesn't exist or isn't readable
+  }
+
+  return null;
+}
+
+/**
+ * Load and parse CharOverride styles from CSS files in the XHTML export
+ *
+ * @param xhtmlDir - Root directory of the XHTML export
+ * @returns Map of CharOverride class name to styling information, or null if CSS not found
+ */
+async function loadCharOverrideStyles(xhtmlDir: string): Promise<Map<string, CharOverrideStyles> | null> {
+  const cssDir = await findCssDir(xhtmlDir);
+  if (!cssDir) {
+    console.warn("[Article Extractor] Could not find CSS directory");
+    return null;
+  }
+
+  try {
+    const files = await readdir(cssDir);
+    let allStyles = new Map<string, CharOverrideStyles>();
+
+    for (const file of files) {
+      const fileName = typeof file === "string" ? file : String(file);
+      if (!fileName.endsWith(".css")) continue;
+
+      const content = await readFile(join(cssDir, fileName), "utf-8");
+      const styles = parseCharOverrideStyles(content);
+
+      // Merge styles from all CSS files
+      for (const [className, style] of styles) {
+        allStyles.set(className, style);
+      }
+    }
+
+    console.log(`[Article Extractor] Loaded ${allStyles.size} CharOverride styles from CSS`);
+    return allStyles;
+  } catch (error) {
+    console.warn(`[Article Extractor] Failed to load CSS: ${error}`);
+    return null;
+  }
+}
 
 /**
  * Extract articles from an XHTML export
@@ -41,6 +122,9 @@ export async function extractArticles(
   console.log(
     `[Article Extractor] Processing ${xhtmlExport.spreads.length} spreads`
   );
+
+  // Load CharOverride styles from CSS for bold/italic detection
+  const charOverrideStyles = await loadCharOverrideStyles(xhtmlExport.rootDir);
 
   // Phase 1: Extract elements from all spreads (skip cover page = spreadIndex 0)
   for (const spread of xhtmlExport.spreads) {
@@ -82,7 +166,7 @@ export async function extractArticles(
   const articles: ExtractedArticle[] = [];
   for (const articleElements of rawArticles) {
     try {
-      const article = buildExtractedArticle(articleElements);
+      const article = buildExtractedArticle(articleElements, charOverrideStyles);
       if (article) {
         articles.push(article);
       }
@@ -130,6 +214,7 @@ function extractElementsFromSpread(
   const introVerseSelector = (styles.introVerseClasses || []).map((c) => `.${c}`).join(", ");
   const verseReferenceSelector = (styles.verseReferenceClasses || []).map((c) => `.${c}`).join(", ");
   const authorBioSelector = (styles.authorBioClasses || []).map((c) => `.${c}`).join(", ");
+  const questionSelector = (styles.questionClasses || []).map((c) => `.${c}`).join(", ");
 
   // Track author elements for author photo detection
   let lastAuthorElementIndex = -1;
@@ -216,7 +301,10 @@ function extractElementsFromSpread(
       type = "author-bio";
     }
     // Standard element types
-    else if (subheadingSelector && $el.is(subheadingSelector)) {
+    // Question must be checked before subheading (question classes contain "tussenkop")
+    else if (questionSelector && $el.is(questionSelector)) {
+      type = "question";
+    } else if (subheadingSelector && $el.is(subheadingSelector)) {
       type = "subheading";
     } else if (streamerSelector && $el.is(streamerSelector)) {
       type = "streamer";
@@ -542,7 +630,8 @@ function shouldStartNewParagraph(
  */
 function mergeBodyParagraphs(
   elements: ArticleElement[],
-  defaultCharOverride: string | null
+  defaultCharOverride: string | null,
+  charOverrideStyles?: Map<string, CharOverrideStyles> | null
 ): string[] {
   if (elements.length === 0) return [];
 
@@ -560,7 +649,7 @@ function mergeBodyParagraphs(
       currentOverride = override;
     } else if (override !== currentOverride) {
       // Different styling - finalize current group and start new one
-      paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+      paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride, charOverrideStyles));
       currentGroup = [el];
       currentOverride = override;
     } else {
@@ -568,7 +657,7 @@ function mergeBodyParagraphs(
       const prevEl = currentGroup[currentGroup.length - 1];
       if (shouldStartNewParagraph(prevEl, el)) {
         // Large gap - finalize current group and start new one
-        paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+        paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride, charOverrideStyles));
         currentGroup = [el];
       } else {
         // Small gap - continue current group (will be merged with line break)
@@ -579,7 +668,7 @@ function mergeBodyParagraphs(
 
   // Finalize last group
   if (currentGroup.length > 0) {
-    paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+    paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride, charOverrideStyles));
   }
 
   return paragraphs;
@@ -594,7 +683,8 @@ function mergeBodyParagraphs(
  */
 function finalizeGroup(
   elements: ArticleElement[],
-  defaultCharOverride: string | null
+  defaultCharOverride: string | null,
+  charOverrideStyles?: Map<string, CharOverrideStyles> | null
 ): string[] {
   if (elements.length === 0) return [];
 
@@ -603,7 +693,7 @@ function finalizeGroup(
 
   // Convert all elements to semantic HTML
   const texts = elements.map((el) =>
-    htmlToSemanticHtml(el.content, defaultCharOverride || undefined)
+    htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined)
   );
 
   if (isItalic) {
@@ -627,7 +717,8 @@ function finalizeGroup(
  */
 function buildBodyBlocks(
   elements: ArticleElement[],
-  defaultCharOverride: string | null
+  defaultCharOverride: string | null,
+  charOverrideStyles?: Map<string, CharOverrideStyles> | null
 ): BodyBlock[] {
   const blocks: BodyBlock[] = [];
   const sidebars: BodyBlock[] = []; // Collect sidebars to append at end
@@ -637,7 +728,7 @@ function buildBodyBlocks(
 
   const flushBodyBuffer = () => {
     if (bodyBuffer.length > 0) {
-      const paragraphs = mergeBodyParagraphs(bodyBuffer, defaultCharOverride);
+      const paragraphs = mergeBodyParagraphs(bodyBuffer, defaultCharOverride, charOverrideStyles);
       for (const content of paragraphs) {
         const type = !firstParagraphSeen ? "intro" : "paragraph";
         blocks.push({ type, content });
@@ -660,7 +751,14 @@ function buildBodyBlocks(
       flushPendingSubheading();
       blocks.push({
         type: "streamer",
-        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined),
+      });
+    } else if (el.type === "question") {
+      flushBodyBuffer();
+      flushPendingSubheading();
+      blocks.push({
+        type: "question",
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined),
       });
     } else if (el.type === "subheading") {
       flushBodyBuffer();
@@ -668,7 +766,7 @@ function buildBodyBlocks(
       // Hold this subheading - if next element is sidebar, they go together
       pendingSubheading = {
         type: "subheading",
-        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined),
       };
     } else if (el.type === "sidebar") {
       flushBodyBuffer();
@@ -679,7 +777,7 @@ function buildBodyBlocks(
       }
       sidebars.push({
         type: "sidebar",
-        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined),
       });
     } else if (el.type === "body") {
       flushPendingSubheading();
@@ -758,7 +856,8 @@ function cleanAuthorNames(rawNames: string[]): string[] {
  * - Third title with year pattern (e.g., "1938-2026") becomes lifespan
  */
 function buildExtractedArticle(
-  elements: ArticleElement[]
+  elements: ArticleElement[],
+  charOverrideStyles?: Map<string, CharOverrideStyles> | null
 ): ExtractedArticle | null {
   // Must have at least a title
   const titleElements = elements.filter((el) => el.type === "title");
@@ -852,9 +951,9 @@ function buildExtractedArticle(
   // Clean and deduplicate author names
   const authorNames = cleanAuthorNames(rawAuthorNames);
 
-  // Get all content elements (body, streamer, subheading, sidebar) in document order
+  // Get all content elements (body, streamer, subheading, sidebar, question) in document order
   const contentElements = elements.filter((el) =>
-    el.type === "body" || el.type === "streamer" || el.type === "subheading" || el.type === "sidebar"
+    el.type === "body" || el.type === "streamer" || el.type === "subheading" || el.type === "sidebar" || el.type === "question"
   );
 
   // Filter out header/footer content from body and sidebar elements
@@ -863,7 +962,7 @@ function buildExtractedArticle(
       const text = htmlToPlainText(el.content);
       return !isFooterContent(text);
     }
-    return true; // Keep streamers and subheadings
+    return true; // Keep streamers, subheadings, and questions
   });
 
   // Build HTML content from body elements only (for legacy content field)
@@ -876,7 +975,7 @@ function buildExtractedArticle(
   const defaultCharOverride = getDominantCharOverride(allBodyHtml);
 
   // Build body paragraphs with streamers/subheadings in correct position
-  const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride);
+  const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride, charOverrideStyles);
 
   // Calculate page range
   const pageStarts = elements.map((el) => el.pageStart);

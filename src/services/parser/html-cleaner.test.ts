@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanHtml, htmlToPlainText, generateExcerpt } from "./html-cleaner";
+import { cleanHtml, htmlToPlainText, generateExcerpt, parseCharOverrideStyles, htmlToSemanticHtml } from "./html-cleaner";
 
 describe("html-cleaner", () => {
   describe("cleanHtml", () => {
@@ -237,6 +237,122 @@ describe("html-cleaner", () => {
       expect(result).not.toContain("<");
       expect(result).not.toContain(">");
       expect(result).toContain("Bold and italic text here");
+    });
+  });
+
+  describe("parseCharOverrideStyles", () => {
+    it("should extract bold styles from CSS", () => {
+      const css = `
+        span.CharOverride-2 {
+          font-weight: bold;
+        }
+      `;
+      const styles = parseCharOverrideStyles(css);
+
+      expect(styles.get("CharOverride-2")).toEqual({ isItalic: false, isBold: true });
+    });
+
+    it("should extract italic styles from CSS", () => {
+      const css = `
+        span.CharOverride-3 {
+          font-style: italic;
+        }
+      `;
+      const styles = parseCharOverrideStyles(css);
+
+      expect(styles.get("CharOverride-3")).toEqual({ isItalic: true, isBold: false });
+    });
+
+    it("should extract combined bold+italic styles", () => {
+      const css = `
+        span.CharOverride-42 {
+          font-weight: bold;
+          font-style: italic;
+        }
+      `;
+      const styles = parseCharOverrideStyles(css);
+
+      expect(styles.get("CharOverride-42")).toEqual({ isItalic: true, isBold: true });
+    });
+
+    it("should handle multiple CharOverride classes", () => {
+      const css = `
+        span.CharOverride-1 { color: #000; }
+        span.CharOverride-2 { font-weight: bold; }
+        span.CharOverride-3 { font-style: italic; }
+        span.CharOverride-4 { font-weight: bold; font-style: italic; }
+      `;
+      const styles = parseCharOverrideStyles(css);
+
+      expect(styles.size).toBe(4);
+      expect(styles.get("CharOverride-1")).toEqual({ isItalic: false, isBold: false });
+      expect(styles.get("CharOverride-2")).toEqual({ isItalic: false, isBold: true });
+      expect(styles.get("CharOverride-3")).toEqual({ isItalic: true, isBold: false });
+      expect(styles.get("CharOverride-4")).toEqual({ isItalic: true, isBold: true });
+    });
+
+    it("should return empty map for empty CSS", () => {
+      const styles = parseCharOverrideStyles("");
+      expect(styles.size).toBe(0);
+    });
+  });
+
+  describe("htmlToSemanticHtml with CharOverride styles", () => {
+    it("should wrap bold text with strong tags", () => {
+      const html = `<body><span class="CharOverride-2" style="top: 100px">Bold text</span></body>`;
+      const charOverrideStyles = new Map([
+        ["CharOverride-1", { isItalic: false, isBold: false }],
+        ["CharOverride-2", { isItalic: false, isBold: true }],
+      ]);
+      const result = htmlToSemanticHtml(html, "CharOverride-1", charOverrideStyles);
+
+      expect(result).toBe("<strong>Bold text</strong>");
+    });
+
+    it("should wrap italic text with em tags", () => {
+      const html = `<body><span class="CharOverride-3" style="top: 100px">Italic text</span></body>`;
+      const charOverrideStyles = new Map([
+        ["CharOverride-1", { isItalic: false, isBold: false }],
+        ["CharOverride-3", { isItalic: true, isBold: false }],
+      ]);
+      const result = htmlToSemanticHtml(html, "CharOverride-1", charOverrideStyles);
+
+      expect(result).toBe("<em>Italic text</em>");
+    });
+
+    it("should wrap bold+italic text with strong+em tags", () => {
+      const html = `<body><span class="CharOverride-4" style="top: 100px">Both styles</span></body>`;
+      const charOverrideStyles = new Map([
+        ["CharOverride-1", { isItalic: false, isBold: false }],
+        ["CharOverride-4", { isItalic: true, isBold: true }],
+      ]);
+      const result = htmlToSemanticHtml(html, "CharOverride-1", charOverrideStyles);
+
+      expect(result).toBe("<strong><em>Both styles</em></strong>");
+    });
+
+    it("should not wrap default CharOverride text", () => {
+      const html = `<body><span class="CharOverride-1" style="top: 100px">Normal text</span></body>`;
+      const charOverrideStyles = new Map([
+        ["CharOverride-1", { isItalic: false, isBold: false }],
+      ]);
+      const result = htmlToSemanticHtml(html, "CharOverride-1", charOverrideStyles);
+
+      expect(result).toBe("Normal text");
+    });
+
+    it("should merge adjacent strong tags", () => {
+      const html = `<body>
+        <span class="CharOverride-2" style="top: 100px">First</span>
+        <span class="CharOverride-2" style="top: 100px">Second</span>
+      </body>`;
+      const charOverrideStyles = new Map([
+        ["CharOverride-1", { isItalic: false, isBold: false }],
+        ["CharOverride-2", { isItalic: false, isBold: true }],
+      ]);
+      const result = htmlToSemanticHtml(html, "CharOverride-1", charOverrideStyles);
+
+      expect(result).toBe("<strong>First Second</strong>");
     });
   });
 });

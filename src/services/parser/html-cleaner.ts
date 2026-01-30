@@ -1,6 +1,45 @@
 import * as cheerio from "cheerio";
 
 /**
+ * CharOverride styling information parsed from CSS
+ */
+export interface CharOverrideStyles {
+  isItalic: boolean;
+  isBold: boolean;
+}
+
+/**
+ * Parse CSS content to extract CharOverride styling information
+ *
+ * Looks for font-weight: bold and font-style: italic in CharOverride class definitions.
+ *
+ * @param cssContent - Raw CSS content
+ * @returns Map of CharOverride class name to styling information
+ */
+export function parseCharOverrideStyles(cssContent: string): Map<string, CharOverrideStyles> {
+  const styles = new Map<string, CharOverrideStyles>();
+
+  // Match span.CharOverride-N { ... } blocks
+  const blockRegex = /span\.(CharOverride-\d+)\s*\{([^}]+)\}/g;
+  let match;
+
+  while ((match = blockRegex.exec(cssContent)) !== null) {
+    const className = match[1];
+    const cssBlock = match[2];
+
+    // Check for font-weight: bold
+    const isBold = /font-weight\s*:\s*bold/i.test(cssBlock);
+
+    // Check for font-style: italic
+    const isItalic = /font-style\s*:\s*italic/i.test(cssBlock);
+
+    styles.set(className, { isItalic, isBold });
+  }
+
+  return styles;
+}
+
+/**
  * Fix hyphenation in text (words broken across lines with hyphens)
  *
  * Only merges if: after hyphen comes lowercase (word continuation, not proper noun)
@@ -133,20 +172,67 @@ export function htmlToPlainText(html: string): string {
 }
 
 /**
+ * Extract Y position from a span's style attribute
+ * Returns the top value in pixels, or null if not found
+ */
+function getYPosition(style: string | undefined): number | null {
+  if (!style) return null;
+  const match = style.match(/top:\s*([\d.]+)px/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * Extract Y-position range from HTML element (for paragraph gap detection)
+ * Returns the first and last Y-positions of spans within the element.
+ *
+ * @param html - HTML content with positioned spans
+ * @returns Object with yStart and yEnd, or null if no spans found
+ */
+export function getYRange(html: string): { yStart: number; yEnd: number } | null {
+  if (!html || !html.trim()) return null;
+
+  const $ = cheerio.load(html);
+  const spans = $("span[style*='top:']");
+
+  if (spans.length === 0) return null;
+
+  let yStart: number | null = null;
+  let yEnd: number | null = null;
+
+  spans.each((_, span) => {
+    const style = $(span).attr("style");
+    const y = getYPosition(style);
+    if (y !== null) {
+      if (yStart === null || y < yStart) yStart = y;
+      if (yEnd === null || y > yEnd) yEnd = y;
+    }
+  });
+
+  if (yStart === null || yEnd === null) return null;
+  return { yStart, yEnd };
+}
+
+/**
  * Extract text from element with spans, fixing hyphenation at span boundaries
+ * and preserving line breaks based on Y-position changes.
  *
  * In InDesign single-page exports, text is split into absolute-positioned spans.
  * Word hyphenation appears as a span ending with "-" followed by a span starting
  * with a lowercase letter. This function merges those correctly while preserving
  * intentional compound words like "een-woord".
+ *
+ * Line breaks are detected by significant Y-position changes between spans.
  */
 function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<cheerio.Element>): string {
-  const parts: string[] = [];
+  const parts: { text: string; y: number | null }[] = [];
 
   $el.find("span").each((_, span) => {
-    const text = $(span).text();
+    const $span = $(span);
+    const text = $span.text();
     if (text) {
-      parts.push(text);
+      const style = $span.attr("style");
+      const y = getYPosition(style);
+      parts.push({ text, y });
     }
   });
 
@@ -155,22 +241,46 @@ function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<cheeri
     return $el.text().trim();
   }
 
-  // Join parts, removing hyphens that appear at end of a span followed by lowercase
+  // Join parts, removing hyphens and adding line breaks where Y changes
   let result = "";
+  let lastY: number | null = null;
+  let skipNextLineBreak = false; // Skip line break after word hyphenation
+
   for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
+    const { text, y } = parts[i];
     const nextPart = parts[i + 1];
 
     // Check if this part ends with hyphen and next starts with lowercase
-    if (part.endsWith("-") && nextPart && /^[a-z]/.test(nextPart)) {
-      // Remove trailing hyphen (it's a line break, not a compound word)
-      result += part.slice(0, -1);
+    // This is word hyphenation - merge the word (no line break)
+    if (text.endsWith("-") && nextPart && /^[a-z]/.test(nextPart.text)) {
+      // Remove trailing hyphen (it's word hyphenation, not a compound word)
+      result += text.slice(0, -1);
+      // Skip line break for the next part - we're continuing a word
+      skipNextLineBreak = true;
     } else {
-      result += part;
+      // Check if Y position changed significantly (new line)
+      // Typical line height is ~250px in InDesign exports
+      if (!skipNextLineBreak && lastY !== null && y !== null && Math.abs(y - lastY) > 100) {
+        // New line - add line break (but not if result already ends with one)
+        if (!result.endsWith("\n")) {
+          result = result.trimEnd() + "\n";
+        }
+      }
+      skipNextLineBreak = false;
+      result += text;
+    }
+
+    if (y !== null) {
+      lastY = y;
     }
   }
 
-  return result.replace(/\s+/g, " ").trim();
+  // Normalize spaces within lines but preserve line breaks
+  return result
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n")
+    .trim();
 }
 
 /**
@@ -210,12 +320,18 @@ export function getDominantCharOverride(html: string): string | null {
 /**
  * Convert InDesign HTML to simplified semantic HTML
  * Preserves italic and bold formatting based on CharOverride classes
+ * Preserves line breaks based on Y-position changes between spans
  *
  * @param html - Raw HTML from InDesign export
- * @param defaultCharOverride - The CharOverride class used for normal text (others become italic)
- * @returns Cleaned HTML with <em> for italic text
+ * @param defaultCharOverride - The CharOverride class used for normal text
+ * @param charOverrideStyles - Map of CharOverride class name to styling (bold/italic)
+ * @returns Cleaned HTML with <em> for italic, <strong> for bold, and \n for line breaks
  */
-export function htmlToSemanticHtml(html: string, defaultCharOverride?: string): string {
+export function htmlToSemanticHtml(
+  html: string,
+  defaultCharOverride?: string,
+  charOverrideStyles?: Map<string, CharOverrideStyles>
+): string {
   if (!html || !html.trim()) {
     return "";
   }
@@ -223,8 +339,8 @@ export function htmlToSemanticHtml(html: string, defaultCharOverride?: string): 
   const $ = cheerio.load(html);
   const $body = $("body");
 
-  // Extract text from spans, marking non-default CharOverride as italic
-  const parts: string[] = [];
+  // Extract text from spans with italic/bold information
+  const parts: { text: string; isItalic: boolean; isBold: boolean; y: number | null }[] = [];
 
   $body.find("span").each((_, span) => {
     const $span = $(span);
@@ -233,49 +349,97 @@ export function htmlToSemanticHtml(html: string, defaultCharOverride?: string): 
 
     const classes = ($span.attr("class") || "").split(/\s+/);
     const charOverride = classes.find((c) => c.startsWith("CharOverride"));
+    const style = $span.attr("style");
+    const y = getYPosition(style);
 
-    // If this CharOverride differs from default, wrap in <em>
-    if (defaultCharOverride && charOverride && charOverride !== defaultCharOverride) {
-      parts.push(`<em>${text}</em>`);
-    } else {
-      parts.push(text);
+    // Check if this is an introletter (drop cap) span - these should not be styled
+    const isIntroletter = classes.some((c) => c.toLowerCase().includes("introletter"));
+
+    let isItalic = false;
+    let isBold = false;
+
+    if (!isIntroletter && charOverride && charOverride !== defaultCharOverride) {
+      // Look up styling from CSS if available
+      const cssStyles = charOverrideStyles?.get(charOverride);
+      if (cssStyles) {
+        isItalic = cssStyles.isItalic;
+        isBold = cssStyles.isBold;
+      } else {
+        // Fallback: if no CSS info available, treat non-default as italic (legacy behavior)
+        isItalic = !!defaultCharOverride;
+      }
     }
+
+    parts.push({ text, isItalic, isBold, y });
   });
 
   if (parts.length === 0) {
     return $body.text().trim();
   }
 
-  // Join parts with hyphenation fix
+  // Join parts with hyphenation fix and line break detection
   let result = "";
+  let lastY: number | null = null;
+  let skipNextLineBreak = false; // Skip line break after word hyphenation
+
   for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
+    const { text, isItalic, isBold, y } = parts[i];
     const nextPart = parts[i + 1];
 
-    // Handle hyphenation at span boundaries
-    const isItalic = part.startsWith("<em>") && part.endsWith("</em>");
-    const textContent = isItalic ? part.slice(4, -5) : part;
-
-    if (textContent.endsWith("-") && nextPart) {
-      const nextIsItalic = nextPart.startsWith("<em>");
-      const nextText = nextIsItalic ? nextPart.slice(4, -5) : nextPart;
-      if (/^[a-z]/.test(nextText)) {
-        // Remove hyphen - it's line continuation
-        if (isItalic) {
-          result += `<em>${textContent.slice(0, -1)}</em>`;
-        } else {
-          result += textContent.slice(0, -1);
+    // Handle hyphenation at span boundaries FIRST
+    // This is word hyphenation - merge the word (no line break)
+    if (text.endsWith("-") && nextPart && /^[a-z]/.test(nextPart.text)) {
+      // Remove hyphen - it's word hyphenation, not a compound word
+      result += wrapWithTags(text.slice(0, -1), isBold, isItalic);
+      // Skip line break for the next part - we're continuing a word
+      skipNextLineBreak = true;
+    } else {
+      // Check if Y position changed significantly (new line)
+      if (!skipNextLineBreak && lastY !== null && y !== null && Math.abs(y - lastY) > 100) {
+        // New line - add line break
+        if (!result.endsWith("\n")) {
+          result = result.trimEnd() + "\n";
         }
-        continue;
       }
+      skipNextLineBreak = false;
+
+      result += wrapWithTags(text, isBold, isItalic);
     }
-    result += part;
+
+    if (y !== null) {
+      lastY = y;
+    }
   }
 
-  // Merge adjacent <em> tags
+  // Merge adjacent <strong> and <em> tags (including across line breaks)
+  result = result.replace(/<\/strong>\s*<strong>/g, " ");
+  result = result.replace(/<\/strong>\n<strong>/g, "\n");
   result = result.replace(/<\/em>\s*<em>/g, " ");
+  result = result.replace(/<\/em>\n<em>/g, "\n");
+  // Also handle nested tags: </em></strong> <strong><em>
+  result = result.replace(/<\/em><\/strong>\s*<strong><em>/g, " ");
+  result = result.replace(/<\/em><\/strong>\n<strong><em>/g, "\n");
 
-  return result.replace(/\s+/g, " ").trim();
+  // Normalize spaces within lines but preserve line breaks
+  return result
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n")
+    .trim();
+}
+
+/**
+ * Wrap text with appropriate HTML tags based on bold/italic flags
+ */
+function wrapWithTags(text: string, isBold: boolean, isItalic: boolean): string {
+  if (isBold && isItalic) {
+    return `<strong><em>${text}</em></strong>`;
+  } else if (isBold) {
+    return `<strong>${text}</strong>`;
+  } else if (isItalic) {
+    return `<em>${text}</em>`;
+  }
+  return text;
 }
 
 /**
