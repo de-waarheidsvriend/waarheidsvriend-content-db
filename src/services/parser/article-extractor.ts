@@ -7,6 +7,7 @@ import type {
   ArticleExtractionResult,
   StyleAnalysis,
   LoadedSpread,
+  BodyBlock,
 } from "@/types";
 import {
   cleanHtml,
@@ -447,6 +448,53 @@ function finalizeGroup(
 }
 
 /**
+ * Build body blocks with streamers and subheadings in correct position
+ *
+ * Processes content elements in document order, keeping streamers/subheadings
+ * as single blocks while merging consecutive body paragraphs.
+ */
+function buildBodyBlocks(
+  elements: ArticleElement[],
+  defaultCharOverride: string | null
+): BodyBlock[] {
+  const blocks: BodyBlock[] = [];
+  let bodyBuffer: ArticleElement[] = [];
+
+  const flushBodyBuffer = () => {
+    if (bodyBuffer.length > 0) {
+      const paragraphs = mergeBodyParagraphs(bodyBuffer, defaultCharOverride);
+      for (const content of paragraphs) {
+        blocks.push({ type: "paragraph", content });
+      }
+      bodyBuffer = [];
+    }
+  };
+
+  for (const el of elements) {
+    if (el.type === "streamer") {
+      flushBodyBuffer();
+      blocks.push({
+        type: "streamer",
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
+      });
+    } else if (el.type === "subheading") {
+      flushBodyBuffer();
+      blocks.push({
+        type: "subheading",
+        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined),
+      });
+    } else if (el.type === "body") {
+      bodyBuffer.push(el);
+    }
+  }
+
+  // Flush remaining body elements
+  flushBodyBuffer();
+
+  return blocks;
+}
+
+/**
  * Clean and deduplicate author names
  *
  * Handles cases like:
@@ -565,24 +613,33 @@ function buildExtractedArticle(
   // Clean and deduplicate author names
   const authorNames = cleanAuthorNames(rawAuthorNames);
 
-  // Combine all body elements into content, filtering out header/footer content
-  const bodyElements = elements.filter((el) => el.type === "body");
-  const filteredBodyElements = bodyElements.filter((el) => {
+  // Get all content elements (body, streamer, subheading) in document order
+  const contentElements = elements.filter((el) =>
+    el.type === "body" || el.type === "streamer" || el.type === "subheading"
+  );
+
+  // Filter out header/footer content from body elements
+  const filteredContentElements = contentElements.filter((el) => {
+    if (el.type !== "body") return true; // Keep streamers and subheadings
     const text = htmlToPlainText(el.content);
     return !isFooterContent(text);
   });
-  const bodyHtml = filteredBodyElements.map((el) => el.content).join("\n");
+
+  // Build HTML content from body elements only (for legacy content field)
+  const bodyOnlyElements = filteredContentElements.filter((el) => el.type === "body");
+  const bodyHtml = bodyOnlyElements.map((el) => el.content).join("\n");
   const content = cleanHtml(bodyHtml);
 
   // Detect the default CharOverride (most common across all body elements)
-  const allBodyHtml = filteredBodyElements.map((el) => el.content).join("");
+  const allBodyHtml = bodyOnlyElements.map((el) => el.content).join("");
   const defaultCharOverride = getDominantCharOverride(allBodyHtml);
 
-  // Merge consecutive body elements with the same styling into paragraphs
-  const bodyParagraphs = mergeBodyParagraphs(filteredBodyElements, defaultCharOverride);
+  // Build body paragraphs with streamers/subheadings in correct position
+  const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride);
 
-  // First body paragraph is the intro
-  const intro = bodyParagraphs.length > 0 ? bodyParagraphs[0] : null;
+  // First paragraph block is the intro
+  const firstParagraph = bodyParagraphs.find((b) => b.type === "paragraph");
+  const intro = firstParagraph ? firstParagraph.content : null;
 
   // Generate excerpt from content
   const excerpt = content ? generateExcerpt(content, 150) : null;

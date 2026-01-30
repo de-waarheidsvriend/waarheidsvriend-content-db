@@ -115,6 +115,14 @@ export interface XhtmlExport {
 }
 
 /**
+ * Body content block with type indicator
+ */
+export interface BodyBlock {
+  type: "paragraph" | "streamer" | "subheading";
+  content: string;
+}
+
+/**
  * Extracted article before database save
  */
 export interface ExtractedArticle {
@@ -124,8 +132,8 @@ export interface ExtractedArticle {
   chapeau: string | null;
   /** Intro paragraph - first paragraph, often styled differently */
   intro: string | null;
-  /** Body paragraphs as array of plain text (hyphenation fixed) */
-  bodyParagraphs: string[];
+  /** Body content blocks in reading order with type indicators */
+  bodyParagraphs: BodyBlock[];
   /** Body content as cleaned HTML (legacy) */
   content: string;
   /** Excerpt (first ~150 chars of body, plain text) */
