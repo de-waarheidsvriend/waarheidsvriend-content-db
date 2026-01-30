@@ -92,6 +92,8 @@ export interface StyleAnalysis {
   introVerseClasses: string[];
   /** Classes that indicate author bio/onderschrift */
   authorBioClasses: string[];
+  /** Classes that indicate verse references (Meditatie_Vers - e.g., "Psalm 57:2b") */
+  verseReferenceClasses: string[];
 }
 
 /**
@@ -118,14 +120,20 @@ export interface XhtmlExport {
 export interface ExtractedArticle {
   /** Article title (cleaned text) */
   title: string;
-  /** Chapeau/intro text (cleaned, optional) */
+  /** Chapeau/intro text - e.g. intro verse for meditaties */
   chapeau: string | null;
-  /** Body content as cleaned HTML */
+  /** Intro paragraph - first paragraph, often styled differently */
+  intro: string | null;
+  /** Body paragraphs as array of plain text (hyphenation fixed) */
+  bodyParagraphs: string[];
+  /** Body content as cleaned HTML (legacy) */
   content: string;
   /** Excerpt (first ~150 chars of body, plain text) */
   excerpt: string | null;
   /** Category/rubriek if detected */
   category: string | null;
+  /** Verse reference for meditaties (e.g., "Psalm 57:2b") */
+  verseReference: string | null;
   /** Author bio/onderschrift (e.g., "is predikant van...") */
   authorBio: string | null;
   /** First page where article appears */
@@ -168,6 +176,7 @@ export interface ArticleElement {
     | "cover-title"
     | "cover-chapeau"
     | "intro-verse"
+    | "verse-reference"
     | "author-bio"
     | "article-end"  // ■ marker
     | "unknown";

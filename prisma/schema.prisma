@@ -32,18 +32,19 @@ model Edition {
 // Article Model - Artikelen gekoppeld aan editie (FR36)
 // ============================================================================
 model Article {
-  id         Int      @id @default(autoincrement())
-  edition_id Int
-  title      String
-  chapeau    String?
-  content    String
-  excerpt    String?
-  category   String?
-  author_bio String?
-  page_start Int?
-  page_end   Int?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  edition_id      Int
+  title           String
+  chapeau         String?
+  content         String
+  excerpt         String?
+  category        String?
+  verse_reference String?
+  author_bio      String?
+  page_start      Int?
+  page_end        Int?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
   // Relations
   edition         Edition         @relation(fields: [edition_id], references: [id], onDelete: Cascade)

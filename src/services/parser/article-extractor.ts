@@ -8,7 +8,14 @@ import type {
   StyleAnalysis,
   LoadedSpread,
 } from "@/types";
-import { cleanHtml, generateExcerpt, htmlToPlainText } from "./html-cleaner";
+import {
+  cleanHtml,
+  generateExcerpt,
+  htmlToPlainText,
+  htmlToSemanticHtml,
+  isFooterContent,
+  getDominantCharOverride,
+} from "./html-cleaner";
 
 /**
  * The article end marker character used by InDesign exports
@@ -116,10 +123,11 @@ function extractElementsFromSpread(
   const sidebarSelector = styles.sidebarClasses.map((c) => `.${c}`).join(", ");
   const captionSelector = styles.captionClasses.map((c) => `.${c}`).join(", ");
 
-  // New selectors for cover, intro-verse, and author-bio
+  // New selectors for cover, intro-verse, verse-reference, and author-bio
   const coverTitleSelector = (styles.coverTitleClasses || []).map((c) => `.${c}`).join(", ");
   const coverChapeauSelector = (styles.coverChapeauClasses || []).map((c) => `.${c}`).join(", ");
   const introVerseSelector = (styles.introVerseClasses || []).map((c) => `.${c}`).join(", ");
+  const verseReferenceSelector = (styles.verseReferenceClasses || []).map((c) => `.${c}`).join(", ");
   const authorBioSelector = (styles.authorBioClasses || []).map((c) => `.${c}`).join(", ");
 
   // Track author elements for author photo detection
@@ -162,8 +170,10 @@ function extractElementsFromSpread(
     const html = $.html(el);
     const text = $el.text().trim();
 
-    // Check for article end marker (■) in any element
-    if (text.includes(ARTICLE_END_MARKER)) {
+    // Check for article end marker (■) - only if this element DIRECTLY contains it
+    // (not via child elements, to avoid detecting it multiple times in parent containers)
+    const ownText = $el.contents().filter((_, node) => node.type === "text").text();
+    if (ownText.includes(ARTICLE_END_MARKER)) {
       elements.push({
         type: "article-end",
         content: ARTICLE_END_MARKER,
@@ -192,9 +202,13 @@ function extractElementsFromSpread(
     } else if (coverChapeauSelector && $el.is(coverChapeauSelector)) {
       type = "cover-chapeau";
     }
-    // Intro verse (meditatie verse)
+    // Intro verse (meditatie verse text)
     else if (introVerseSelector && $el.is(introVerseSelector)) {
       type = "intro-verse";
+    }
+    // Verse reference (e.g., "Psalm 57:2b")
+    else if (verseReferenceSelector && $el.is(verseReferenceSelector)) {
+      type = "verse-reference";
     }
     // Author bio (onderschrift-auteur paragraph)
     else if (authorBioSelector && $el.is(authorBioSelector)) {
@@ -222,7 +236,7 @@ function extractElementsFromSpread(
       type = "category";
     }
 
-    // Add classified elements
+    // Add classified elements (InDesign exports in reading order, no sorting needed)
     if (type !== "unknown") {
       elements.push({
         type,
@@ -236,6 +250,9 @@ function extractElementsFromSpread(
 
     elementIndex++;
   });
+
+  // Note: InDesign exports elements in reading order, so no sorting needed
+  // The DOM order already reflects the correct flow across columns
 
   // Store author photo filenames for later use in the spread context
   // We'll pass these through the element content for now
@@ -253,8 +270,10 @@ function extractElementsFromSpread(
  *
  * Article structure:
  * - Starts at a title element
- * - Ends at ■ (article-end marker)
- * - Everything between belongs to that article (chapeau, body, author, images, etc.)
+ * - Main content ends at ■ marker
+ * - After ■, we continue collecting author-bio, author, and streamer elements
+ *   (these often appear after ■ in visual order but belong to the article)
+ * - Article fully ends at next title or body content after ■
  *
  * Cover elements are skipped as they're handled separately.
  */
@@ -264,6 +283,7 @@ function groupElementsIntoArticles(
   const articles: ArticleElement[][] = [];
   let currentArticle: ArticleElement[] = [];
   let pendingCategory: ArticleElement | null = null;
+  let afterEndMarker = false; // Track if we've passed ■
 
   for (const element of elements) {
     // Skip cover elements - they're handled separately
@@ -274,27 +294,35 @@ function groupElementsIntoArticles(
     if (element.type === "title") {
       // Title starts a new article
       if (currentArticle.length > 0) {
-        // Previous article didn't end with ■ - still save it
-        console.warn(
-          "[Article Extractor] Article ended without ■ marker, saving anyway"
-        );
+        // Save previous article
         articles.push(currentArticle);
       }
       // Start new article - include pending category if any
       currentArticle = pendingCategory ? [pendingCategory, element] : [element];
       pendingCategory = null;
-    } else if (element.type === "article-end") {
-      // ■ ends current article
-      if (currentArticle.length > 0) {
-        articles.push(currentArticle);
-        currentArticle = [];
-      }
-      pendingCategory = null;
+      afterEndMarker = false;
     } else if (element.type === "category" && currentArticle.length === 0) {
       // Category before any title - hold it for the next article
       pendingCategory = element;
+    } else if (element.type === "article-end") {
+      // ■ marker - include it and mark that we're in "trailing" mode
+      if (currentArticle.length > 0) {
+        currentArticle.push(element);
+        afterEndMarker = true;
+      }
+    } else if (afterEndMarker) {
+      // After ■: only collect author-bio, author, and streamer elements
+      // These often appear visually below ■ but belong to the article
+      if (element.type === "author-bio" || element.type === "author" || element.type === "streamer") {
+        currentArticle.push(element);
+      } else if (element.type === "body" || element.type === "chapeau" || element.type === "subheading") {
+        // Body/chapeau/subheading after ■ means we've moved to next article content
+        // Don't include this element, it belongs to the next article
+        // (but don't start a new article yet - wait for title)
+      }
+      // Other element types (image, caption, etc.) after ■ are ignored
     } else {
-      // All other elements belong to current article (if one exists)
+      // Before ■: all elements belong to current article
       if (currentArticle.length > 0) {
         currentArticle.push(element);
       }
@@ -302,15 +330,169 @@ function groupElementsIntoArticles(
     }
   }
 
-  // Handle last article if no ■ found (shouldn't happen normally)
+  // Save last article
   if (currentArticle.length > 0) {
-    console.warn(
-      "[Article Extractor] Last article ended without ■ marker, saving anyway"
-    );
     articles.push(currentArticle);
   }
 
   return articles;
+}
+
+/**
+ * Merge consecutive body elements into logical paragraphs
+ *
+ * InDesign single-page exports split logical paragraphs into multiple <p> elements.
+ * This function intelligently merges them:
+ * - Elements with different CharOverride (styling) are kept separate
+ * - Verse-like content (short lines, italic, no sentence-ending punctuation) is merged
+ * - Prose paragraphs (ending with . ! ?) stay separate
+ *
+ * @param elements - Body elements to merge
+ * @param defaultCharOverride - The CharOverride class used for normal text
+ * @returns Array of merged paragraph strings with HTML formatting preserved
+ */
+function mergeBodyParagraphs(
+  elements: ArticleElement[],
+  defaultCharOverride: string | null
+): string[] {
+  if (elements.length === 0) return [];
+
+  const paragraphs: string[] = [];
+  let currentGroup: ArticleElement[] = [];
+  let currentOverride: string | null = null;
+
+  for (const el of elements) {
+    const override = getDominantCharOverride(el.content);
+    const text = htmlToPlainText(el.content);
+    const isShortLine = text.length < 80;
+    const endsWithSentence = /[.!?:]["']?\s*$/.test(text);
+
+    if (currentGroup.length === 0) {
+      // Start new group
+      currentGroup.push(el);
+      currentOverride = override;
+    } else if (override !== currentOverride) {
+      // Different styling - finalize current group and start new one
+      paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+      currentGroup = [el];
+      currentOverride = override;
+    } else if (override !== defaultCharOverride) {
+      // Non-default styling (e.g. italic) - merge into verse
+      currentGroup.push(el);
+    } else if (isShortLine && !endsWithSentence) {
+      // Short line without sentence ending - might be continuation
+      currentGroup.push(el);
+    } else {
+      // Normal prose ending with sentence - finalize and start new
+      currentGroup.push(el);
+      paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+      currentGroup = [];
+      currentOverride = null;
+    }
+  }
+
+  // Finalize last group
+  if (currentGroup.length > 0) {
+    paragraphs.push(...finalizeGroup(currentGroup, defaultCharOverride));
+  }
+
+  return paragraphs;
+}
+
+/**
+ * Finalize a group of elements into paragraph(s)
+ */
+function finalizeGroup(
+  elements: ArticleElement[],
+  defaultCharOverride: string | null
+): string[] {
+  if (elements.length === 0) return [];
+
+  const override = getDominantCharOverride(elements[0].content);
+  const isItalic = override !== defaultCharOverride;
+
+  // Convert all elements to semantic HTML
+  const texts = elements.map((el) =>
+    htmlToSemanticHtml(el.content, defaultCharOverride || undefined)
+  );
+
+  if (isItalic) {
+    // Italic content (verse) - merge with line breaks
+    return [texts.join("\n")];
+  }
+
+  // Normal prose - each sentence-ending element is its own paragraph
+  // But short lines without sentence endings get merged with the next
+  const result: string[] = [];
+  let buffer: string[] = [];
+
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i];
+    const plainText = htmlToPlainText(elements[i].content);
+    const endsWithSentence = /[.!?:]["']?\s*$/.test(plainText);
+
+    buffer.push(text);
+
+    if (endsWithSentence || i === texts.length - 1) {
+      result.push(buffer.join(" "));
+      buffer = [];
+    }
+  }
+
+  if (buffer.length > 0) {
+    result.push(buffer.join(" "));
+  }
+
+  return result;
+}
+
+/**
+ * Clean and deduplicate author names
+ *
+ * Handles cases like:
+ * - "Tekst: ds. K.H. Bogerd" → "ds. K.H. Bogerd"
+ * - Fragments like "Ds.", "K.H.", "Bogerd" (skip short fragments)
+ * - Duplicates with different prefixes
+ */
+function cleanAuthorNames(rawNames: string[]): string[] {
+  const cleaned: string[] = [];
+  const seenNormalized = new Set<string>();
+
+  for (const raw of rawNames) {
+    // Skip very short fragments (likely split text)
+    if (raw.length < 5) continue;
+
+    // Remove common prefixes
+    let name = raw
+      .replace(/^Tekst:\s*/i, "")
+      .replace(/^Door:\s*/i, "")
+      .replace(/^Auteur:\s*/i, "")
+      .trim();
+
+    // Skip if still too short
+    if (name.length < 3) continue;
+
+    // Normalize for deduplication (lowercase, no dots/spaces)
+    const normalized = name.toLowerCase().replace(/[\s.]/g, "");
+
+    // Skip if we've seen a similar name
+    if (seenNormalized.has(normalized)) continue;
+
+    // Check if this is a substring of an existing name or vice versa
+    let isDuplicate = false;
+    for (const existing of seenNormalized) {
+      if (normalized.includes(existing) || existing.includes(normalized)) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    if (isDuplicate) continue;
+
+    seenNormalized.add(normalized);
+    cleaned.push(name);
+  }
+
+  return cleaned;
 }
 
 /**
@@ -342,11 +524,31 @@ function buildExtractedArticle(
     ? htmlToPlainText(chapeauElement.content)
     : null;
 
-  // Extract category (first category element)
+  // Extract verse reference for meditaties (e.g., "Psalm 57:2b")
+  const verseReferenceElement = elements.find((el) => el.type === "verse-reference");
+  const verseReference = verseReferenceElement
+    ? htmlToPlainText(verseReferenceElement.content)
+    : null;
+
+  // Extract category - first try explicit category element
   const categoryElement = elements.find((el) => el.type === "category");
-  const category = categoryElement
+  let category = categoryElement
     ? htmlToPlainText(categoryElement.content)
     : null;
+
+  // If no explicit category, detect from class name keywords
+  if (!category) {
+    for (const el of elements) {
+      const lowerClass = el.className.toLowerCase();
+      if (lowerClass.includes("meditatie")) {
+        category = "Meditatie";
+        break;
+      } else if (lowerClass.includes("column")) {
+        category = "Column";
+        break;
+      }
+    }
+  }
 
   // Extract author bio (first author-bio element)
   const authorBioElement = elements.find((el) => el.type === "author-bio");
@@ -356,14 +558,31 @@ function buildExtractedArticle(
 
   // Extract author names from author elements (within this article's boundaries)
   const authorElements = elements.filter((el) => el.type === "author");
-  const authorNames = authorElements
+  const rawAuthorNames = authorElements
     .map((el) => htmlToPlainText(el.content))
     .filter((name) => name.length > 0);
 
-  // Combine all body elements into content
+  // Clean and deduplicate author names
+  const authorNames = cleanAuthorNames(rawAuthorNames);
+
+  // Combine all body elements into content, filtering out header/footer content
   const bodyElements = elements.filter((el) => el.type === "body");
-  const bodyHtml = bodyElements.map((el) => el.content).join("\n");
+  const filteredBodyElements = bodyElements.filter((el) => {
+    const text = htmlToPlainText(el.content);
+    return !isFooterContent(text);
+  });
+  const bodyHtml = filteredBodyElements.map((el) => el.content).join("\n");
   const content = cleanHtml(bodyHtml);
+
+  // Detect the default CharOverride (most common across all body elements)
+  const allBodyHtml = filteredBodyElements.map((el) => el.content).join("");
+  const defaultCharOverride = getDominantCharOverride(allBodyHtml);
+
+  // Merge consecutive body elements with the same styling into paragraphs
+  const bodyParagraphs = mergeBodyParagraphs(filteredBodyElements, defaultCharOverride);
+
+  // First body paragraph is the intro
+  const intro = bodyParagraphs.length > 0 ? bodyParagraphs[0] : null;
 
   // Generate excerpt from content
   const excerpt = content ? generateExcerpt(content, 150) : null;
@@ -447,9 +666,12 @@ function buildExtractedArticle(
   return {
     title,
     chapeau,
+    intro,
+    bodyParagraphs,
     content,
     excerpt,
     category,
+    verseReference,
     authorBio,
     pageStart,
     pageEnd,
@@ -508,6 +730,7 @@ export async function saveArticles(
             content: article.content,
             excerpt: article.excerpt,
             category: article.category,
+            verse_reference: article.verseReference,
             author_bio: article.authorBio,
             page_start: article.pageStart,
             page_end: article.pageEnd,

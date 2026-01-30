@@ -3,9 +3,24 @@ import { join } from "path";
 import type { StyleAnalysis } from "@/types";
 
 /**
+ * Extract category from class prefix (e.g., "Meditatie_kop-boven-vers" -> "Meditatie")
+ *
+ * InDesign exports often use a pattern where the article type/category is used
+ * as a prefix in semantic class names. This function extracts that prefix.
+ */
+export function extractCategoryFromClass(className: string): string | null {
+  // Look for pattern: Category_element-name (starts with capital letter)
+  const match = className.match(/^([A-Z][a-zA-Z]+)_/);
+  if (match) {
+    return match[1];
+  }
+  return null;
+}
+
+/**
  * Classify a class name into a semantic category based on Dutch/English naming patterns
  */
-function classifyClassName(className: string): string | null {
+export function classifyClassName(className: string): string | null {
   const lowerName = className.toLowerCase();
 
   // Skip generic InDesign override classes
@@ -33,12 +48,16 @@ function classifyClassName(className: string): string | null {
     return "cover-chapeau";
   }
 
-  // ========== MEDITATIE VERSE PATTERN (check before title) ==========
+  // ========== MEDITATIE PATTERNS (check before title) ==========
   if (
     lowerName.includes("meditatie_kop-boven-vers") ||
     lowerName.includes("kop-boven-vers")
   ) {
     return "intro-verse";
+  }
+  // Verse reference (e.g., "Psalm 57:2b")
+  if (lowerName.includes("meditatie_vers") && !lowerName.includes("boven-vers")) {
+    return "verse-reference";
   }
 
   // ========== AUTHOR BIO PATTERN (check before caption) ==========
@@ -176,6 +195,7 @@ interface StyleCategories {
   coverChapeauClasses: string[];
   introVerseClasses: string[];
   authorBioClasses: string[];
+  verseReferenceClasses: string[];
 }
 
 /**
@@ -234,6 +254,9 @@ function addClassToCategories(
     case "author-bio":
       categories.authorBioClasses.push(className);
       break;
+    case "verse-reference":
+      categories.verseReferenceClasses.push(className);
+      break;
   }
 }
 
@@ -257,6 +280,7 @@ function createEmptyCategories(): StyleCategories {
     coverChapeauClasses: [],
     introVerseClasses: [],
     authorBioClasses: [],
+    verseReferenceClasses: [],
   };
 }
 
@@ -277,6 +301,7 @@ function logStyleAnalysis(categories: StyleCategories, source: string): void {
   console.log(`  - Cover title classes: ${categories.coverTitleClasses.join(", ") || "none"}`);
   console.log(`  - Cover chapeau classes: ${categories.coverChapeauClasses.join(", ") || "none"}`);
   console.log(`  - Intro verse classes: ${categories.introVerseClasses.join(", ") || "none"}`);
+  console.log(`  - Verse reference classes: ${categories.verseReferenceClasses.join(", ") || "none"}`);
   console.log(`  - Author bio classes: ${categories.authorBioClasses.join(", ") || "none"}`);
   console.log(`  - Article boundary classes: ${categories.articleBoundaryClasses.join(", ") || "none"}`);
 }
@@ -301,6 +326,7 @@ function categoriesToStyleAnalysis(categories: StyleCategories): StyleAnalysis {
     coverChapeauClasses: categories.coverChapeauClasses,
     introVerseClasses: categories.introVerseClasses,
     authorBioClasses: categories.authorBioClasses,
+    verseReferenceClasses: categories.verseReferenceClasses,
   };
 }
 
@@ -427,5 +453,6 @@ export function mergeStyleAnalysis(
     coverChapeauClasses: mergeArrays(a.coverChapeauClasses || [], b.coverChapeauClasses || []),
     introVerseClasses: mergeArrays(a.introVerseClasses || [], b.introVerseClasses || []),
     authorBioClasses: mergeArrays(a.authorBioClasses || [], b.authorBioClasses || []),
+    verseReferenceClasses: mergeArrays(a.verseReferenceClasses || [], b.verseReferenceClasses || []),
   };
 }
