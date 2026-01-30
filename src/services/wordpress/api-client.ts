@@ -90,7 +90,8 @@ export async function getArticleBySlug(
   slug: string,
   credentials: WpCredentials
 ): Promise<WpArticleResponse | null> {
-  const url = `${credentials.apiUrl}/wv-articles?slug=${encodeURIComponent(slug)}`;
+  // Include status=any to find drafts, pending, and published articles
+  const url = `${credentials.apiUrl}/wv-articles?slug=${encodeURIComponent(slug)}&status=any`;
 
   try {
     const articles = await wpFetch<WpArticleResponse[]>(

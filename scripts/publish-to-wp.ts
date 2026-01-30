@@ -1,15 +1,19 @@
 /**
  * WordPress Publication CLI Script
  *
- * Publishes all articles from an edition to WordPress.
+ * Publishes articles to WordPress - either a full edition or a single article.
  *
  * Usage:
  *   npx tsx scripts/publish-to-wp.ts --edition=123
  *   npx tsx scripts/publish-to-wp.ts --edition=123 --dry-run
+ *   npx tsx scripts/publish-to-wp.ts --article=456
+ *   npx tsx scripts/publish-to-wp.ts --article=456 --dry-run
  *
  * Or via npm script:
  *   npm run publish:wp -- --edition=123
  *   npm run publish:wp -- --edition=123 --dry-run
+ *   npm run publish:wp -- --article=456
+ *   npm run publish:wp -- --article=456 --dry-run
  */
 
 import { config } from "dotenv";
@@ -24,6 +28,7 @@ config({ path: join(projectRoot, ".env") });
 
 import {
   publishEditionToWordPress,
+  publishArticleToWordPress,
   validateCredentials,
   type PublishProgress,
 } from "@/services/wordpress";
@@ -31,9 +36,15 @@ import {
 /**
  * Parse command line arguments
  */
-function parseArgs(): { editionId: number | null; dryRun: boolean; help: boolean } {
+function parseArgs(): {
+  editionId: number | null;
+  articleId: number | null;
+  dryRun: boolean;
+  help: boolean;
+} {
   const args = process.argv.slice(2);
   let editionId: number | null = null;
+  let articleId: number | null = null;
   let dryRun = false;
   let help = false;
 
@@ -48,10 +59,16 @@ function parseArgs(): { editionId: number | null; dryRun: boolean; help: boolean
       if (isNaN(editionId)) {
         editionId = null;
       }
+    } else if (arg.startsWith("--article=")) {
+      const value = arg.substring("--article=".length);
+      articleId = parseInt(value, 10);
+      if (isNaN(articleId)) {
+        articleId = null;
+      }
     }
   }
 
-  return { editionId, dryRun, help };
+  return { editionId, articleId, dryRun, help };
 }
 
 /**
@@ -61,20 +78,25 @@ function printUsage(): void {
   console.log(`
 WordPress Publication Script - De Waarheidsvriend
 
-Publiceert alle artikelen van een editie naar WordPress.
+Publiceert artikelen naar WordPress - een hele editie of een enkel artikel.
 
 Gebruik:
   npx tsx scripts/publish-to-wp.ts --edition=<id> [--dry-run]
+  npx tsx scripts/publish-to-wp.ts --article=<id> [--dry-run]
   npm run publish:wp -- --edition=<id> [--dry-run]
+  npm run publish:wp -- --article=<id> [--dry-run]
 
 Opties:
-  --edition=<id>   Editie ID om te publiceren (verplicht)
+  --edition=<id>   Editie ID om te publiceren (alle artikelen)
+  --article=<id>   Artikel ID om te publiceren (enkel artikel)
   --dry-run        Simuleer publicatie zonder echte API calls
   --help, -h       Toon dit help bericht
 
 Voorbeelden:
   npx tsx scripts/publish-to-wp.ts --edition=123
   npx tsx scripts/publish-to-wp.ts --edition=123 --dry-run
+  npx tsx scripts/publish-to-wp.ts --article=456
+  npx tsx scripts/publish-to-wp.ts --article=456 --dry-run
 
 Environment Variables (in .env.local):
   NEXT_PUBLIC_WP_API_URL  WordPress REST API URL
@@ -110,47 +132,62 @@ function onProgress(progress: PublishProgress): void {
 }
 
 /**
- * Main entry point
+ * Publish a single article
  */
-async function main(): Promise<void> {
-  const { editionId, dryRun, help } = parseArgs();
+async function publishSingleArticle(articleId: number, dryRun: boolean): Promise<void> {
+  console.log(`Publiceren artikel ${articleId}...\n`);
 
-  if (help) {
-    printUsage();
+  const result = await publishArticleToWordPress(articleId, {
+    dryRun,
+    onProgress: (progress) => onProgress({ ...progress, current: 1, total: 1 }),
+  });
+
+  // Summary
+  console.log("\n" + "─".repeat(60));
+  console.log("Samenvatting:");
+  console.log("─".repeat(60));
+  console.log(`Artikel:           ${articleId}`);
+  console.log(`Status:            ${result.success ? "Gepubliceerd" : "Mislukt"}`);
+
+  if (result.errors.length > 0) {
+    console.log("\nFouten:");
+    for (const error of result.errors) {
+      console.log(`  - ${error}`);
+    }
+  }
+
+  // Print result details
+  if (result.results.length > 0) {
+    const r = result.results[0];
+    console.log("\nDetails:");
+    console.log("─".repeat(60));
+    const status = r.success ? "✓" : "✗";
+    const action = r.created ? "nieuw" : "update";
+    const info = r.wpPostId ? `ID: ${r.wpPostId} (${action})` : r.error || "";
+    console.log(`${status} ${r.title}`);
+    if (r.wpSlug) {
+      console.log(`  Slug: ${r.wpSlug}`);
+    }
+    if (info) {
+      console.log(`  ${info}`);
+    }
+  }
+
+  console.log("\n" + "═".repeat(60));
+
+  if (result.success) {
+    console.log("✓ Publicatie succesvol afgerond");
     process.exit(0);
-  }
-
-  if (editionId === null) {
-    console.error("Fout: --edition=<id> is verplicht\n");
-    printUsage();
+  } else {
+    console.log("✗ Publicatie mislukt");
     process.exit(1);
   }
+}
 
-  console.log("═".repeat(60));
-  console.log("WordPress Publicatie - De Waarheidsvriend");
-  console.log("═".repeat(60));
-  console.log();
-
-  if (dryRun) {
-    console.log("⚠️  DRY RUN MODE - Geen echte API calls worden gemaakt\n");
-  }
-
-  // Validate credentials first
-  console.log("Controleren WordPress credentials...");
-  const validation = await validateCredentials();
-
-  if (!validation.valid) {
-    console.error(`\n❌ ${validation.error}`);
-    console.error("\nControleer de volgende environment variables:");
-    console.error("  - NEXT_PUBLIC_WP_API_URL");
-    console.error("  - WP_USERNAME");
-    console.error("  - WP_APP_PASSWORD");
-    process.exit(1);
-  }
-
-  console.log(`✓ Ingelogd als: ${validation.username}\n`);
-
-  // Publish
+/**
+ * Publish all articles from an edition
+ */
+async function publishEdition(editionId: number, dryRun: boolean): Promise<void> {
   console.log(`Publiceren editie ${editionId}...\n`);
 
   const result = await publishEditionToWordPress(editionId, {
@@ -196,6 +233,61 @@ async function main(): Promise<void> {
   } else {
     console.log("✗ Publicatie afgerond met fouten");
     process.exit(1);
+  }
+}
+
+/**
+ * Main entry point
+ */
+async function main(): Promise<void> {
+  const { editionId, articleId, dryRun, help } = parseArgs();
+
+  if (help) {
+    printUsage();
+    process.exit(0);
+  }
+
+  if (editionId === null && articleId === null) {
+    console.error("Fout: --edition=<id> of --article=<id> is verplicht\n");
+    printUsage();
+    process.exit(1);
+  }
+
+  if (editionId !== null && articleId !== null) {
+    console.error("Fout: Gebruik --edition of --article, niet beide\n");
+    printUsage();
+    process.exit(1);
+  }
+
+  console.log("═".repeat(60));
+  console.log("WordPress Publicatie - De Waarheidsvriend");
+  console.log("═".repeat(60));
+  console.log();
+
+  if (dryRun) {
+    console.log("⚠️  DRY RUN MODE - Geen echte API calls worden gemaakt\n");
+  }
+
+  // Validate credentials first
+  console.log("Controleren WordPress credentials...");
+  const validation = await validateCredentials();
+
+  if (!validation.valid) {
+    console.error(`\n❌ ${validation.error}`);
+    console.error("\nControleer de volgende environment variables:");
+    console.error("  - NEXT_PUBLIC_WP_API_URL");
+    console.error("  - WP_USERNAME");
+    console.error("  - WP_APP_PASSWORD");
+    process.exit(1);
+  }
+
+  console.log(`✓ Ingelogd als: ${validation.username}\n`);
+
+  // Publish based on mode
+  if (articleId !== null) {
+    await publishSingleArticle(articleId, dryRun);
+  } else if (editionId !== null) {
+    await publishEdition(editionId, dryRun);
   }
 }
 

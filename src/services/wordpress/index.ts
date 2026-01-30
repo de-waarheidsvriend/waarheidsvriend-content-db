@@ -62,6 +62,58 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Load a single article from database with all related data
+ */
+async function loadArticleData(
+  articleId: number
+): Promise<{ article: LocalArticleData; editionNumber: number } | null> {
+  const article = await (prisma as PrismaClient).article.findUnique({
+    where: { id: articleId },
+    include: {
+      edition: true,
+      article_authors: {
+        include: {
+          author: true,
+        },
+      },
+      images: {
+        orderBy: { sort_order: "asc" },
+      },
+    },
+  });
+
+  if (!article) {
+    return null;
+  }
+
+  return {
+    article: {
+      id: article.id,
+      title: article.title,
+      chapeau: article.chapeau,
+      excerpt: article.excerpt,
+      content: article.content,
+      category: article.category,
+      pageStart: article.page_start,
+      pageEnd: article.page_end,
+      authors: article.article_authors.map((aa) => ({
+        id: aa.author.id,
+        name: aa.author.name,
+        photoUrl: aa.author.photo_url,
+      })),
+      images: article.images.map((img) => ({
+        id: img.id,
+        url: img.url,
+        caption: img.caption,
+        isFeatured: img.is_featured,
+        sortOrder: img.sort_order,
+      })),
+    },
+    editionNumber: article.edition.edition_number,
+  };
+}
+
+/**
  * Load edition data from database with all related data
  */
 async function loadEditionData(editionId: number): Promise<LocalEditionData | null> {
@@ -388,6 +440,112 @@ export async function publishEditionToWordPress(
     articlesFailed,
     results,
     errors,
+    dryRun,
+  };
+}
+
+/**
+ * Publish a single article to WordPress by article ID
+ *
+ * @param articleId - Database ID of the article to publish
+ * @param options - Publishing options (dryRun, progress callback)
+ * @returns PublishResult with the single article result
+ */
+export async function publishArticleToWordPress(
+  articleId: number,
+  options: PublishOptions = {}
+): Promise<PublishResult> {
+  const { dryRun = false, onProgress } = options;
+
+  console.log(
+    `[WordPress] Starting publication of article ${articleId}${dryRun ? " (dry run)" : ""}`
+  );
+
+  // Step 1: Validate credentials
+  const credentials = getCredentialsFromEnv();
+  if (!credentials) {
+    return {
+      success: false,
+      editionId: 0,
+      articlesPublished: 0,
+      articlesSkipped: 0,
+      articlesFailed: 1,
+      results: [],
+      errors: [
+        "WordPress credentials niet geconfigureerd. Stel WP_USERNAME, WP_APP_PASSWORD en NEXT_PUBLIC_WP_API_URL in.",
+      ],
+      dryRun,
+    };
+  }
+
+  if (!dryRun) {
+    const validation = await validateWpCredentials(credentials);
+    if (!validation.valid) {
+      return {
+        success: false,
+        editionId: 0,
+        articlesPublished: 0,
+        articlesSkipped: 0,
+        articlesFailed: 1,
+        results: [],
+        errors: [`WordPress authenticatie mislukt: ${validation.error}`],
+        dryRun,
+      };
+    }
+    console.log(`[WordPress] Authenticated as: ${validation.user?.name}`);
+  }
+
+  // Step 2: Load article data
+  const articleData = await loadArticleData(articleId);
+  if (!articleData) {
+    return {
+      success: false,
+      editionId: 0,
+      articlesPublished: 0,
+      articlesSkipped: 0,
+      articlesFailed: 1,
+      results: [],
+      errors: [`Artikel ${articleId} niet gevonden`],
+      dryRun,
+    };
+  }
+
+  const { article, editionNumber } = articleData;
+
+  // Step 3: Build author cache
+  if (!dryRun) {
+    await buildAuthorCache(credentials);
+  }
+
+  const uploadsDir = getUploadsDir();
+
+  // Step 4: Publish the article
+  const result = await publishSingleArticle(
+    article,
+    editionNumber,
+    credentials,
+    uploadsDir,
+    dryRun,
+    onProgress,
+    1,
+    1
+  );
+
+  // Step 5: Clear caches
+  clearAuthorCache();
+
+  console.log(
+    `[WordPress] Publication complete: ${result.success ? "success" : "failed"}`
+  );
+
+  return {
+    success: result.success,
+    editionId: 0,
+    articlesPublished: result.success ? 1 : 0,
+    articlesSkipped: 0,
+    articlesFailed: result.success ? 0 : 1,
+    results: [result],
+    errors: result.error ? [`Artikel "${result.title}": ${result.error}`] : [],
     dryRun,
   };
 }
