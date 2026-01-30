@@ -130,14 +130,10 @@ export interface ExtractedArticle {
   title: string;
   /** Chapeau/intro text - e.g. intro verse for meditaties */
   chapeau: string | null;
-  /** Intro paragraph - first paragraph, often styled differently */
-  intro: string | null;
   /** Body content blocks in reading order with type indicators */
   bodyParagraphs: BodyBlock[];
   /** Body content as cleaned HTML (legacy) */
   content: string;
-  /** Excerpt (first ~150 chars of body, plain text) */
-  excerpt: string | null;
   /** Category/rubriek if detected */
   category: string | null;
   /** Verse reference for meditaties (e.g., "Psalm 57:2b") */

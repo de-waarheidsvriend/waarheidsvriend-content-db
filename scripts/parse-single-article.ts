@@ -32,9 +32,7 @@ function articleToJson(article: ExtractedArticle) {
     category: article.category,
     chapeau: article.chapeau,
     verseReference: article.verseReference,
-    intro: article.intro,
     bodyParagraphs: article.bodyParagraphs,
-    excerpt: article.excerpt,
     authorNames: article.authorNames,
     authorBio: article.authorBio,
     streamers: article.streamers,
@@ -102,7 +100,6 @@ async function main() {
   console.log(`  Subheadings: ${article.subheadings.length}`);
   console.log(`  Images: ${article.referencedImages.length}`);
   console.log(`  Pages: ${article.pageStart}-${article.pageEnd}`);
-  console.log(`  Excerpt: ${article.excerpt?.substring(0, 80) || "(none)"}...`);
 
   // Save to JSON
   mkdirSync(OUTPUT_DIR, { recursive: true });

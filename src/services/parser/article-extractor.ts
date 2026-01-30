@@ -11,7 +11,6 @@ import type {
 } from "@/types";
 import {
   cleanHtml,
-  generateExcerpt,
   htmlToPlainText,
   htmlToSemanticHtml,
   isFooterContent,
@@ -642,13 +641,6 @@ function buildExtractedArticle(
   // Build body paragraphs with streamers/subheadings in correct position
   const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride);
 
-  // First block with type "intro" provides the intro content
-  const introBlock = bodyParagraphs.find((b) => b.type === "intro");
-  const intro = introBlock ? introBlock.content : null;
-
-  // Generate excerpt from content
-  const excerpt = content ? generateExcerpt(content, 150) : null;
-
   // Calculate page range
   const pageStarts = elements.map((el) => el.pageStart);
   const pageEnds = elements.map((el) => el.pageEnd);
@@ -728,10 +720,8 @@ function buildExtractedArticle(
   return {
     title,
     chapeau,
-    intro,
     bodyParagraphs,
     content,
-    excerpt,
     category,
     verseReference,
     authorBio,
