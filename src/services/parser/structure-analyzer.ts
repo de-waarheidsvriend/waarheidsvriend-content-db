@@ -77,6 +77,11 @@ export function classifyClassName(className: string): string | null {
     return "author";
   }
 
+  // Interview question patterns (must check before general subheading patterns)
+  if (lowerName.includes("tussenkop-vraag") || lowerName.includes("question")) {
+    return "question";
+  }
+
   // Subheading patterns (must check before general "kop" patterns)
   if (
     lowerName.includes("tussenkop") ||
@@ -117,6 +122,11 @@ export function classifyClassName(className: string): string | null {
     return "sidebar";
   }
 
+  // Book info patterns: book titles in review boxes are sidebars, not article titles
+  if (lowerName.includes("titel-boek") || lowerName.includes("title-book")) {
+    return "sidebar";
+  }
+
   // Title patterns: kop, hoofdkop, titel, title (excluding cover and verse patterns)
   if (
     lowerName.includes("hoofdkop") ||
@@ -132,10 +142,10 @@ export function classifyClassName(className: string): string | null {
   }
 
   // Chapeau/intro patterns (excluding cover and verse patterns)
-  // Exclude "introletter" - that's a drop cap style, not intro text
+  // Exclude "introletter" and "intro-letter" - that's a drop cap style, not intro text
   if (
     (lowerName.includes("chapeau") && !lowerName.includes("omslag")) ||
-    (lowerName.includes("intro") && !lowerName.includes("boven-vers") && !lowerName.includes("introletter")) ||
+    (lowerName.includes("intro") && !lowerName.includes("boven-vers") && !lowerName.includes("introletter") && !lowerName.includes("intro-letter")) ||
     (lowerName.includes("ankeiler") && !lowerName.includes("omslag"))
   ) {
     return "chapeau";
@@ -171,7 +181,8 @@ export function classifyClassName(className: string): string | null {
   }
 
   // Article boundary patterns
-  if (lowerName.includes("artikel") || lowerName.includes("article")) {
+  // Exclude "introletter" - that's a drop cap styling class, not an article boundary
+  if ((lowerName.includes("artikel") || lowerName.includes("article")) && !lowerName.includes("introletter")) {
     return "article-boundary";
   }
 
@@ -198,6 +209,7 @@ interface StyleCategories {
   introVerseClasses: string[];
   authorBioClasses: string[];
   verseReferenceClasses: string[];
+  questionClasses: string[];
 }
 
 /**
@@ -259,6 +271,9 @@ function addClassToCategories(
     case "verse-reference":
       categories.verseReferenceClasses.push(className);
       break;
+    case "question":
+      categories.questionClasses.push(className);
+      break;
   }
 }
 
@@ -283,6 +298,7 @@ function createEmptyCategories(): StyleCategories {
     introVerseClasses: [],
     authorBioClasses: [],
     verseReferenceClasses: [],
+    questionClasses: [],
   };
 }
 
@@ -305,6 +321,7 @@ function logStyleAnalysis(categories: StyleCategories, source: string): void {
   console.log(`  - Intro verse classes: ${categories.introVerseClasses.join(", ") || "none"}`);
   console.log(`  - Verse reference classes: ${categories.verseReferenceClasses.join(", ") || "none"}`);
   console.log(`  - Author bio classes: ${categories.authorBioClasses.join(", ") || "none"}`);
+  console.log(`  - Question classes: ${categories.questionClasses.join(", ") || "none"}`);
   console.log(`  - Article boundary classes: ${categories.articleBoundaryClasses.join(", ") || "none"}`);
 }
 
@@ -329,6 +346,7 @@ function categoriesToStyleAnalysis(categories: StyleCategories): StyleAnalysis {
     introVerseClasses: categories.introVerseClasses,
     authorBioClasses: categories.authorBioClasses,
     verseReferenceClasses: categories.verseReferenceClasses,
+    questionClasses: categories.questionClasses,
   };
 }
 
@@ -456,5 +474,6 @@ export function mergeStyleAnalysis(
     introVerseClasses: mergeArrays(a.introVerseClasses || [], b.introVerseClasses || []),
     authorBioClasses: mergeArrays(a.authorBioClasses || [], b.authorBioClasses || []),
     verseReferenceClasses: mergeArrays(a.verseReferenceClasses || [], b.verseReferenceClasses || []),
+    questionClasses: mergeArrays(a.questionClasses || [], b.questionClasses || []),
   };
 }

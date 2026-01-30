@@ -94,6 +94,8 @@ export interface StyleAnalysis {
   authorBioClasses: string[];
   /** Classes that indicate verse references (Meditatie_Vers - e.g., "Psalm 57:2b") */
   verseReferenceClasses: string[];
+  /** Classes that indicate interview questions (Tussenkop-vraag) */
+  questionClasses: string[];
 }
 
 /**
@@ -118,7 +120,7 @@ export interface XhtmlExport {
  * Body content block with type indicator
  */
 export interface BodyBlock {
-  type: "intro" | "paragraph" | "streamer" | "subheading";
+  type: "intro" | "paragraph" | "streamer" | "subheading" | "sidebar" | "question";
   content: string;
 }
 
@@ -128,6 +130,8 @@ export interface BodyBlock {
 export interface ExtractedArticle {
   /** Article title (cleaned text) */
   title: string;
+  /** Subtitle/onderkop if present (second title without ■ marker between) */
+  subtitle?: string | null;
   /** Chapeau/intro text - e.g. intro verse for meditaties */
   chapeau: string | null;
   /** Body content blocks in reading order with type indicators */
@@ -136,6 +140,8 @@ export interface ExtractedArticle {
   content: string;
   /** Category/rubriek if detected */
   category: string | null;
+  /** Lifespan for "In memoriam" articles (e.g., "1938-2026") */
+  lifespan: string | null;
   /** Verse reference for meditaties (e.g., "Psalm 57:2b") */
   verseReference: string | null;
   /** Author bio/onderschrift (e.g., "is predikant van...") */
@@ -182,6 +188,7 @@ export interface ArticleElement {
     | "intro-verse"
     | "verse-reference"
     | "author-bio"
+    | "question"
     | "article-end"  // ■ marker
     | "unknown";
   content: string;
@@ -189,6 +196,10 @@ export interface ArticleElement {
   spreadIndex: number;
   pageStart: number;
   pageEnd: number;
+  /** Y-position of first span (for paragraph gap detection) */
+  yStart?: number;
+  /** Y-position of last span (for paragraph gap detection) */
+  yEnd?: number;
 }
 
 /**

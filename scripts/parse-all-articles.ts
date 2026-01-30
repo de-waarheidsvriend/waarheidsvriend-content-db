@@ -123,6 +123,7 @@ function articleToMarkdown(article: ExtractedArticle): string {
 function articleToJson(article: ExtractedArticle) {
   return {
     title: article.title,
+    subtitle: article.subtitle || null,
     category: article.category,
     lifespan: article.lifespan,
     chapeau: article.chapeau,
