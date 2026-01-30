@@ -1118,7 +1118,7 @@ export async function saveArticles(
             title: article.title,
             chapeau: article.chapeau,
             content: article.content,
-            excerpt: article.excerpt,
+            excerpt: article.chapeau, // Use chapeau as excerpt fallback
             category: article.category,
             verse_reference: article.verseReference,
             author_bio: article.authorBio,

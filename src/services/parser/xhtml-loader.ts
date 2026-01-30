@@ -231,6 +231,8 @@ function emptyStyleAnalysis(): StyleAnalysis {
     coverChapeauClasses: [],
     introVerseClasses: [],
     authorBioClasses: [],
+    verseReferenceClasses: [],
+    questionClasses: [],
   };
 }
 

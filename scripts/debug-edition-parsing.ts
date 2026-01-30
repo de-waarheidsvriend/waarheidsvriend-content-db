@@ -125,7 +125,6 @@ async function debugEditionParsing(xhtmlPath: string) {
     log(`  Pages: ${article.pageStart}-${article.pageEnd}`);
     log(`  Category: ${article.category || '(none)'}`);
     log(`  Chapeau: ${article.chapeau?.substring(0, 100) || '(none)'}${article.chapeau && article.chapeau.length > 100 ? '...' : ''}`);
-    log(`  Excerpt: ${article.excerpt?.substring(0, 100) || '(none)'}${article.excerpt && article.excerpt.length > 100 ? '...' : ''}`);
     log(`  Content length: ${article.content.length} chars`);
     log(`  Streamers: ${article.streamers.length > 0 ? article.streamers.join(', ').substring(0, 100) : '(none)'}`);
     log(`  Subheadings: ${article.subheadings.length > 0 ? article.subheadings.join(', ').substring(0, 100) : '(none)'}`);
@@ -162,10 +161,10 @@ async function debugEditionParsing(xhtmlPath: string) {
     }
 
     // Issue: Content starts with intro text that should be chapeau
-    if (!article.chapeau && article.excerpt) {
-      const excerptLower = article.excerpt.toLowerCase();
-      if (excerptLower.includes('deze ') && (excerptLower.includes('meditatie') || excerptLower.includes('artikel'))) {
-        issues.push('Excerpt looks like intro text - chapeau may be missing');
+    if (!article.chapeau && article.content) {
+      const contentPreview = article.content.replace(/<[^>]+>/g, ' ').trim().substring(0, 100).toLowerCase();
+      if (contentPreview.includes('deze ') && (contentPreview.includes('meditatie') || contentPreview.includes('artikel'))) {
+        issues.push('Content starts with intro text - chapeau may be missing');
       }
     }
 

@@ -223,7 +223,7 @@ export function getYRange(html: string): { yStart: number; yEnd: number } | null
  *
  * Line breaks are detected by significant Y-position changes between spans.
  */
-function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<cheerio.Element>): string {
+function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<any>): string {
   const parts: { text: string; y: number | null }[] = [];
 
   $el.find("span").each((_, span) => {

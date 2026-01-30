@@ -72,10 +72,6 @@ async function main() {
       console.log(`   📖 Pages: ${article.pageStart}${article.pageEnd !== article.pageStart ? `-${article.pageEnd}` : ""}`);
       console.log(`   📑 Spreads: ${article.sourceSpreadIndexes.join(", ")}`);
 
-      if (article.excerpt) {
-        console.log(`   ✂️  Excerpt: ${article.excerpt}`);
-      }
-
       // Show content stats
       const contentLength = article.content.length;
       const wordCount = article.content.split(/\s+/).filter(Boolean).length;
