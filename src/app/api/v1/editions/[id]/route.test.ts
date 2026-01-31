@@ -117,6 +117,7 @@ describe("GET /api/v1/editions/[id]", () => {
         status: "completed",
         created_at: mockDate,
         updated_at: mockDate,
+        cover_headlines: null,
         _count: { articles: 5 },
       } as Awaited<ReturnType<typeof prisma.edition.findUnique>>);
 
@@ -144,6 +145,7 @@ describe("GET /api/v1/editions/[id]", () => {
         status: "processing",
         created_at: mockDate,
         updated_at: mockDate,
+        cover_headlines: null,
         _count: { articles: 10 },
       } as Awaited<ReturnType<typeof prisma.edition.findUnique>>);
 
@@ -203,6 +205,7 @@ describe("GET /api/v1/editions/[id]", () => {
         status: "completed",
         created_at: mockDate,
         updated_at: mockDate,
+        cover_headlines: null,
         _count: { articles: 5 },
       } as Awaited<ReturnType<typeof prisma.edition.findUnique>>);
 

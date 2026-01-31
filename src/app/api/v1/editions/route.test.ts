@@ -96,6 +96,7 @@ describe("GET /api/v1/editions", () => {
           status: "completed",
           created_at: mockDate,
           updated_at: mockDate,
+          cover_headlines: null,
           _count: { articles: 5 },
         } as Awaited<ReturnType<typeof prisma.edition.findMany>>[0],
         {
@@ -105,6 +106,7 @@ describe("GET /api/v1/editions", () => {
           status: "processing",
           created_at: mockDate,
           updated_at: mockDate,
+          cover_headlines: null,
           _count: { articles: 3 },
         } as Awaited<ReturnType<typeof prisma.edition.findMany>>[0],
       ]);
@@ -143,6 +145,7 @@ describe("GET /api/v1/editions", () => {
           status: "completed_with_errors",
           created_at: mockDate,
           updated_at: mockDate,
+          cover_headlines: null,
           _count: { articles: 10 },
         } as Awaited<ReturnType<typeof prisma.edition.findMany>>[0],
       ]);
@@ -209,6 +212,7 @@ describe("GET /api/v1/editions", () => {
           status: "completed",
           created_at: newerDate,
           updated_at: newerDate,
+          cover_headlines: null,
           _count: { articles: 8 },
         } as Awaited<ReturnType<typeof prisma.edition.findMany>>[0],
         {
@@ -218,6 +222,7 @@ describe("GET /api/v1/editions", () => {
           status: "completed",
           created_at: olderDate,
           updated_at: olderDate,
+          cover_headlines: null,
           _count: { articles: 5 },
         } as Awaited<ReturnType<typeof prisma.edition.findMany>>[0],
       ]);

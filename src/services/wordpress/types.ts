@@ -177,7 +177,7 @@ export interface PublishProgress {
   current: number;
   total: number;
   currentArticle: string;
-  status: "uploading_image" | "syncing_author" | "publishing" | "completed" | "failed";
+  status: "uploading_image" | "syncing_author" | "classifying_category" | "publishing" | "completed" | "failed";
 }
 
 /**
@@ -194,12 +194,14 @@ export interface PublishOptions {
 export interface LocalArticleData {
   id: number;
   title: string;
+  subtitle: string | null;
   chapeau: string | null;
   excerpt: string | null;
   content: string;
   category: string | null;
   pageStart: number | null;
   pageEnd: number | null;
+  authorBio: string | null;
   authors: Array<{
     id: number;
     name: string;

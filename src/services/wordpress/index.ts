@@ -29,12 +29,19 @@ import {
 import {
   mapArticleToWpPayload,
   generateArticleSlug,
+  createAuthorBlock,
+  createCategoryBlock,
 } from "./article-mapper";
+
+import { classifyArticleCategory } from "./category-classifier";
 
 import {
   uploadFeaturedImage,
+  uploadAuthorPhoto,
   getUploadsDir,
 } from "./media-uploader";
+
+import { createAuthHeader } from "./api-client";
 
 import {
   buildAuthorCache,
@@ -48,6 +55,7 @@ export * from "./api-client";
 export * from "./article-mapper";
 export * from "./media-uploader";
 export * from "./author-sync";
+export * from "./category-classifier";
 
 /**
  * Rate limiting delay between WordPress API calls (ms)
@@ -66,7 +74,7 @@ function sleep(ms: number): Promise<void> {
  */
 async function loadArticleData(
   articleId: number
-): Promise<{ article: LocalArticleData; editionNumber: number } | null> {
+): Promise<{ article: LocalArticleData; editionNumber: number; editionDate: Date } | null> {
   const article = await (prisma as PrismaClient).article.findUnique({
     where: { id: articleId },
     include: {
@@ -90,12 +98,14 @@ async function loadArticleData(
     article: {
       id: article.id,
       title: article.title,
+      subtitle: article.subtitle,
       chapeau: article.chapeau,
       excerpt: article.excerpt,
       content: article.content,
       category: article.category,
       pageStart: article.page_start,
       pageEnd: article.page_end,
+      authorBio: article.author_bio,
       authors: article.article_authors.map((aa) => ({
         id: aa.author.id,
         name: aa.author.name,
@@ -110,6 +120,7 @@ async function loadArticleData(
       })),
     },
     editionNumber: article.edition.edition_number,
+    editionDate: article.edition.edition_date,
   };
 }
 
@@ -147,12 +158,14 @@ async function loadEditionData(editionId: number): Promise<LocalEditionData | nu
     articles: edition.articles.map((article) => ({
       id: article.id,
       title: article.title,
+      subtitle: article.subtitle,
       chapeau: article.chapeau,
       excerpt: article.excerpt,
       content: article.content,
       category: article.category,
       pageStart: article.page_start,
       pageEnd: article.page_end,
+      authorBio: article.author_bio,
       authors: article.article_authors.map((aa) => ({
         id: aa.author.id,
         name: aa.author.name,
@@ -175,6 +188,7 @@ async function loadEditionData(editionId: number): Promise<LocalEditionData | nu
 async function publishSingleArticle(
   article: LocalArticleData,
   editionNumber: number,
+  editionDate: Date,
   credentials: WpCredentials,
   uploadsDir: string,
   dryRun: boolean,
@@ -194,7 +208,7 @@ async function publishSingleArticle(
   };
 
   try {
-    // Step 1: Sync author(s)
+    // Step 1: Sync author(s) - try to find existing WP user
     reportProgress("syncing_author");
     let wpAuthorId: number | undefined;
 
@@ -229,20 +243,90 @@ async function publishSingleArticle(
       }
     }
 
-    // Step 3: Map article to WP payload
+    // Step 3: Upload author photo and create fallback block (if no WP author ID)
+    let authorPhotoUrl: string | undefined;
+
+    if (article.authors.length > 0 && !wpAuthorId) {
+      const primaryAuthor = article.authors[0];
+
+      if (!dryRun) {
+        // Upload author photo to media library
+        if (primaryAuthor.photoUrl) {
+          const photoMediaId = await uploadAuthorPhoto(
+            primaryAuthor.name,
+            primaryAuthor.photoUrl,
+            uploadsDir,
+            credentials
+          );
+          if (photoMediaId) {
+            // Get the uploaded image URL from WordPress
+            try {
+              const mediaResponse = await fetch(
+                `${credentials.apiUrl}/media/${photoMediaId}`,
+                { headers: { Authorization: createAuthHeader(credentials) } }
+              );
+              if (mediaResponse.ok) {
+                const mediaData = await mediaResponse.json();
+                authorPhotoUrl = mediaData.source_url;
+              }
+            } catch (error) {
+              console.warn(`[WordPress] Failed to get author photo URL:`, error);
+            }
+          }
+          await sleep(API_DELAY_MS);
+        }
+      } else {
+        console.log(`[DryRun] Would upload author photo and create author block for: ${primaryAuthor.name}`);
+      }
+    }
+
+    // Step 3.5: Classify category via Claude AI
+    reportProgress("classifying_category");
+    let categoryName: string | undefined;
+
+    if (!dryRun) {
+      const classified = await classifyArticleCategory(article.title, article.content);
+      if (classified) {
+        categoryName = classified;
+        console.log(`[WordPress] Categorie bepaald: ${categoryName}`);
+      }
+    } else {
+      console.log(`[DryRun] Would classify article category via Claude AI`);
+    }
+
+    // Step 4: Map article to WP payload
     reportProgress("publishing");
     const payload = mapArticleToWpPayload(
       article,
       editionNumber,
+      editionDate,
       wpAuthorId,
       wpImageId
     );
+
+    // Add category text block at the beginning of article
+    if (categoryName && !dryRun) {
+      const categoryBlock = createCategoryBlock(categoryName);
+      payload.acf.components.unshift(categoryBlock);
+
+      // TODO: WordPress categorie-koppeling implementeren
+      // - Categorie opzoeken via /categories endpoint
+      // - Als gevonden: payload.acf.article_category = categoryId
+      // - Zie ClickUp taak 86c7yd7rw voor details
+    }
+
+    // Add author fallback block at the end (after paywall) if no WP author ID
+    if (article.authors.length > 0 && !wpAuthorId && !dryRun) {
+      const primaryAuthor = article.authors[0];
+      const authorBlock = createAuthorBlock(primaryAuthor.name, authorPhotoUrl, article.authorBio);
+      payload.acf.components.push(authorBlock);
+    }
 
     if (dryRun) {
       console.log(`[DryRun] Would publish article: ${article.title}`);
       console.log(`[DryRun]   Slug: ${payload.slug}`);
       console.log(`[DryRun]   Components: ${payload.acf.components.length}`);
-      console.log(`[DryRun]   Author ID: ${wpAuthorId || "none"}`);
+      console.log(`[DryRun]   Author ID: ${wpAuthorId || "none (fallback block)"}`);
       console.log(`[DryRun]   Image ID: ${wpImageId || "none"}`);
 
       return {
@@ -406,6 +490,7 @@ export async function publishEditionToWordPress(
     const result = await publishSingleArticle(
       article,
       edition.editionNumber,
+      edition.editionDate,
       credentials,
       uploadsDir,
       dryRun,
@@ -510,7 +595,7 @@ export async function publishArticleToWordPress(
     };
   }
 
-  const { article, editionNumber } = articleData;
+  const { article, editionNumber, editionDate } = articleData;
 
   // Step 3: Build author cache
   if (!dryRun) {
@@ -523,6 +608,7 @@ export async function publishArticleToWordPress(
   const result = await publishSingleArticle(
     article,
     editionNumber,
+    editionDate,
     credentials,
     uploadsDir,
     dryRun,

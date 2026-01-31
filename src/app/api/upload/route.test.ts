@@ -61,6 +61,7 @@ describe('Upload API Route', () => {
       status: 'processing',
       created_at: new Date(),
       updated_at: new Date(),
+      cover_headlines: null,
     });
     // Mock metadata extractor return value
     vi.mocked(extractMetadata).mockResolvedValue({
@@ -207,6 +208,7 @@ describe('Upload API Route', () => {
       status: 'processing',
       created_at: new Date(),
       updated_at: new Date(),
+      cover_headlines: null,
     });
 
     const formData = new FormData();

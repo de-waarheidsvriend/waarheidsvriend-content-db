@@ -9,6 +9,7 @@ async function main() {
   const article = await prisma.article.findFirst({
     where: { edition_id: 420 },
     include: {
+      edition: true,
       article_authors: { include: { author: true } },
       images: { orderBy: { sort_order: "asc" } }
     }
@@ -22,12 +23,14 @@ async function main() {
   const localArticle = {
     id: article.id,
     title: article.title,
+    subtitle: article.subtitle,
     chapeau: article.chapeau,
     excerpt: article.excerpt,
     content: article.content,
     category: article.category,
     pageStart: article.page_start,
     pageEnd: article.page_end,
+    authorBio: article.author_bio,
     authors: article.article_authors.map(aa => ({
       id: aa.author.id,
       name: aa.author.name,
@@ -42,7 +45,7 @@ async function main() {
     }))
   };
 
-  const payload = mapArticleToWpPayload(localArticle, -746781107, undefined, undefined);
+  const payload = mapArticleToWpPayload(localArticle, article.edition.edition_number, article.edition.edition_date, undefined, undefined);
 
   console.log("Artikel:", article.title);
   console.log("\nPayload:", JSON.stringify(payload, null, 2));

@@ -308,7 +308,9 @@ function extractElementsFromSpread(
       type = "subheading";
     } else if (streamerSelector && $el.is(streamerSelector)) {
       type = "streamer";
-    } else if (sidebarSelector && $el.is(sidebarSelector)) {
+    } else if (sidebarSelector && $el.is(sidebarSelector) && tagName !== "div") {
+      // Only match p elements for sidebar - div containers like Basisafbeeldingskader
+      // contain child p elements that have the actual content
       type = "sidebar";
     } else if (captionSelector && $el.is(captionSelector)) {
       type = "caption";
@@ -723,6 +725,7 @@ function buildBodyBlocks(
   const blocks: BodyBlock[] = [];
   const sidebars: BodyBlock[] = []; // Collect sidebars to append at end
   let bodyBuffer: ArticleElement[] = [];
+  let sidebarBuffer: ArticleElement[] = []; // Buffer for consecutive sidebar elements
   let firstParagraphSeen = false;
   let pendingSubheading: BodyBlock | null = null; // Hold subheading to check if it belongs to a sidebar
 
@@ -738,6 +741,20 @@ function buildBodyBlocks(
     }
   };
 
+  const flushSidebarBuffer = () => {
+    if (sidebarBuffer.length > 0) {
+      // Merge consecutive sidebar elements into one block
+      const mergedContent = sidebarBuffer
+        .map((el) => htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined))
+        .join("\n");
+      sidebars.push({
+        type: "sidebar",
+        content: mergedContent,
+      });
+      sidebarBuffer = [];
+    }
+  };
+
   const flushPendingSubheading = () => {
     if (pendingSubheading) {
       blocks.push(pendingSubheading);
@@ -748,6 +765,7 @@ function buildBodyBlocks(
   for (const el of elements) {
     if (el.type === "streamer") {
       flushBodyBuffer();
+      flushSidebarBuffer();
       flushPendingSubheading();
       blocks.push({
         type: "streamer",
@@ -755,6 +773,7 @@ function buildBodyBlocks(
       });
     } else if (el.type === "question") {
       flushBodyBuffer();
+      flushSidebarBuffer();
       flushPendingSubheading();
       blocks.push({
         type: "question",
@@ -762,6 +781,7 @@ function buildBodyBlocks(
       });
     } else if (el.type === "subheading") {
       flushBodyBuffer();
+      flushSidebarBuffer();
       flushPendingSubheading();
       // Hold this subheading - if next element is sidebar, they go together
       pendingSubheading = {
@@ -770,16 +790,15 @@ function buildBodyBlocks(
       };
     } else if (el.type === "sidebar") {
       flushBodyBuffer();
-      // If there's a pending subheading, it's the sidebar's title - move both to end
+      // If there's a pending subheading, it's the sidebar's title - move to sidebars
       if (pendingSubheading) {
         sidebars.push(pendingSubheading);
         pendingSubheading = null;
       }
-      sidebars.push({
-        type: "sidebar",
-        content: htmlToSemanticHtml(el.content, defaultCharOverride || undefined, charOverrideStyles || undefined),
-      });
+      // Add to sidebar buffer (will be merged with consecutive sidebar elements)
+      sidebarBuffer.push(el);
     } else if (el.type === "body") {
+      flushSidebarBuffer();
       flushPendingSubheading();
       bodyBuffer.push(el);
     }
@@ -787,6 +806,7 @@ function buildBodyBlocks(
 
   // Flush remaining elements
   flushBodyBuffer();
+  flushSidebarBuffer();
   flushPendingSubheading();
 
   // Append sidebars at the end
@@ -974,10 +994,34 @@ function buildExtractedArticle(
   const bodyParagraphs = buildBodyBlocks(filteredContentElements, defaultCharOverride, charOverrideStyles);
 
   // Build HTML content from body paragraphs (clean semantic HTML)
-  const bodyParagraphContents = bodyParagraphs
-    .filter((b) => b.type === "intro" || b.type === "paragraph")
-    .map((b) => `<p>${b.content}</p>`);
+  const bodyParagraphContents = bodyParagraphs.map((b) => {
+    switch (b.type) {
+      case "intro":
+      case "paragraph":
+        return `<p>${b.content}</p>`;
+      case "subheading":
+        return `<h2>${b.content}</h2>`;
+      case "streamer":
+        return `<blockquote>${b.content}</blockquote>`;
+      case "sidebar":
+        return `<aside class="sidebar">${b.content}</aside>`;
+      case "question":
+        return `<p class="question"><strong>${b.content}</strong></p>`;
+      default:
+        return `<p>${b.content}</p>`;
+    }
+  });
   const content = bodyParagraphContents.join("\n");
+
+  // Fallback: if no explicit chapeau, use first "intro" paragraph content (plain text)
+  const finalChapeau = chapeau || (() => {
+    const introBlock = bodyParagraphs.find((b) => b.type === "intro");
+    if (introBlock) {
+      // Strip HTML tags to get plain text
+      return htmlToPlainText(`<p>${introBlock.content}</p>`);
+    }
+    return null;
+  })();
 
   // Calculate page range
   const pageStarts = elements.map((el) => el.pageStart);
@@ -1026,8 +1070,31 @@ function buildExtractedArticle(
   const streamers = streamerElements.map((el) => htmlToPlainText(el.content));
 
   // Extract sidebar/kader blocks (FR19) - keep as cleaned HTML
-  const sidebarElements = elements.filter((el) => el.type === "sidebar");
-  const sidebars = sidebarElements.map((el) => cleanHtml(el.content));
+  // Merge consecutive sidebar elements into single blocks
+  const sidebars: string[] = [];
+  let currentSidebarGroup: string[] = [];
+  let lastSidebarIndex = -2; // Track if sidebars are consecutive
+
+  for (let i = 0; i < elements.length; i++) {
+    if (elements[i].type === "sidebar") {
+      const content = cleanHtml(elements[i].content);
+      if (i === lastSidebarIndex + 1) {
+        // Consecutive sidebar - add to current group
+        currentSidebarGroup.push(content);
+      } else {
+        // Not consecutive - flush current group and start new one
+        if (currentSidebarGroup.length > 0) {
+          sidebars.push(currentSidebarGroup.join("\n"));
+        }
+        currentSidebarGroup = [content];
+      }
+      lastSidebarIndex = i;
+    }
+  }
+  // Flush remaining sidebar group
+  if (currentSidebarGroup.length > 0) {
+    sidebars.push(currentSidebarGroup.join("\n"));
+  }
 
   // Extract captions and try to associate with images
   // Captions typically appear near images in the document
@@ -1058,7 +1125,7 @@ function buildExtractedArticle(
   return {
     title,
     subtitle,
-    chapeau,
+    chapeau: finalChapeau,
     bodyParagraphs,
     content,
     category,
@@ -1118,6 +1185,7 @@ export async function saveArticles(
           data: {
             edition_id: editionId,
             title: article.title,
+            subtitle: article.subtitle || article.lifespan,
             chapeau: article.chapeau,
             content: article.content,
             excerpt: article.chapeau, // Use chapeau as excerpt fallback

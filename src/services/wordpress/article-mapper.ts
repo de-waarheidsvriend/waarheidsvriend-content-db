@@ -8,6 +8,7 @@
 import type { ApiContentBlock } from "@/types/api";
 import type {
   WpAcfComponent,
+  WpAcfTextComponent,
   WpArticlePayload,
   LocalArticleData,
 } from "./types";
@@ -15,6 +16,49 @@ import {
   transformToContentBlocks,
   type ImageData,
 } from "@/lib/content-blocks";
+
+/**
+ * Create a category label text block for the top of the article.
+ * Fallback when category cannot be linked via WordPress API.
+ *
+ * @param categoryName - The category name to display
+ * @returns ACF text component with styled category label
+ */
+export function createCategoryBlock(categoryName: string): WpAcfTextComponent {
+  return {
+    acf_fc_layout: "text",
+    text_text: `<p class="category-label" style="margin-bottom:16px;font-size:14px;color:#666;"><strong>Categorie:</strong> ${escapeHtml(categoryName)}</p>`,
+  };
+}
+
+/**
+ * Create an author info text block for fallback display.
+ * Used when author cannot be linked via ACF relationship field
+ * (due to WordPress permission restrictions on user creation).
+ *
+ * @param authorName - The display name of the author
+ * @param photoUrl - Optional URL to the author's photo (from WordPress media library)
+ * @param bio - Optional author bio text (e.g., "is predikant te Urk")
+ * @returns ACF text component with styled author info block
+ */
+export function createAuthorBlock(
+  authorName: string,
+  photoUrl?: string,
+  bio?: string | null
+): WpAcfTextComponent {
+  const escapedName = escapeHtml(authorName);
+  const photoHtml = photoUrl
+    ? `<img src="${photoUrl}" alt="${escapedName}" class="author-photo" style="float:left;margin-right:16px;width:80px;height:80px;border-radius:50%;object-fit:cover;">`
+    : '';
+  const bioHtml = bio
+    ? ` ${escapeHtml(bio)}`
+    : '';
+
+  return {
+    acf_fc_layout: "text",
+    text_text: `<div class="author-block" style="margin-top:32px;padding:16px;background:#f5f5f5;border-radius:8px;overflow:hidden;">${photoHtml}<p style="margin:0;"><strong>${escapedName}</strong>${bioHtml}</p></div>`,
+  };
+}
 
 /**
  * Convert a single content block to HTML string for combining into text components.
@@ -418,7 +462,7 @@ export function mapArticleToWpPayload(
     acf: {
       article_type: articleType,
       article_intro: article.chapeau || article.excerpt || "",
-      article_subtitle: "", // Not available in current data structure
+      article_subtitle: article.subtitle || "",
       ...(authorId && { article_author: authorId }),
       ...(featuredImageId && { article_image: featuredImageId }),
       components,
