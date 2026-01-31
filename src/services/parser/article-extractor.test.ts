@@ -148,6 +148,7 @@ describe("article-extractor", () => {
           <body>
             <p class="Titel">First Article</p>
             <p class="Broodtekst">First body.</p>
+            <p class="Broodtekst">■</p>
             <p class="Titel">Second Article</p>
             <p class="Broodtekst">Second body.</p>
           </body>
@@ -170,6 +171,7 @@ describe("article-extractor", () => {
           <body>
             <p class="Titel">Article on Spread 1</p>
             <p class="Broodtekst">Body for spread 1.</p>
+            <p class="Broodtekst">■</p>
           </body>
         </html>
       `
@@ -226,15 +228,16 @@ describe("article-extractor", () => {
       expect(result.articles[0].title).toBe("Real Article");
     });
 
-    it("should generate excerpt from body content", async () => {
-      const longBody = "A".repeat(200);
+    it("should use chapeau as excerpt", async () => {
+      const longChapeau = "This is a long chapeau that introduces the article content.";
       const spread = createMockSpread(
         1,
         `
         <html>
           <body>
-            <p class="Titel">Article with Long Body</p>
-            <p class="Broodtekst">${longBody}</p>
+            <p class="Titel">Article with Chapeau</p>
+            <p class="Chapeau">${longChapeau}</p>
+            <p class="Broodtekst">Body content here.</p>
           </body>
         </html>
       `
@@ -242,8 +245,7 @@ describe("article-extractor", () => {
 
       const result = await extractArticles(createMockExport([spread]));
 
-      expect(result.articles[0].excerpt).not.toBeNull();
-      expect(result.articles[0].excerpt!.length).toBeLessThanOrEqual(153);
+      expect(result.articles[0].chapeau).toBe(longChapeau);
     });
 
     it("should set correct page numbers", async () => {
@@ -577,6 +579,7 @@ describe("article-extractor", () => {
           <body>
             <p class="Titel">First Article</p>
             <p class="Broodtekst">First body content</p>
+            <p class="Broodtekst">■</p>
           </body>
         </html>
       `

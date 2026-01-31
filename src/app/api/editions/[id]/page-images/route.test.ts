@@ -28,8 +28,8 @@ describe('GET /api/editions/[id]/page-images', () => {
   it('should return page images for a valid edition', async () => {
     mockFindUnique.mockResolvedValue({ id: 1 });
     mockFindMany.mockResolvedValue([
-      { id: 1, page_number: 1, image_url: '/uploads/page-1.png' },
-      { id: 2, page_number: 2, image_url: '/uploads/page-2.png' },
+      { id: 1, page_number: 1, image_url: 'page-1.png' },
+      { id: 2, page_number: 2, image_url: 'page-2.png' },
     ]);
 
     const request = new NextRequest('http://localhost/api/editions/1/page-images');
@@ -129,7 +129,7 @@ describe('GET /api/editions/[id]/page-images', () => {
   it('should transform database model to API response format correctly', async () => {
     mockFindUnique.mockResolvedValue({ id: 1 });
     mockFindMany.mockResolvedValue([
-      { id: 10, page_number: 5, image_url: '/uploads/test.png', edition_id: 1 },
+      { id: 10, page_number: 5, image_url: 'test.png', edition_id: 1 },
     ]);
 
     const request = new NextRequest('http://localhost/api/editions/1/page-images');

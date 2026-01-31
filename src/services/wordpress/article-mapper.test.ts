@@ -13,6 +13,7 @@ import {
   mapArticleToWpPayload,
   getFeaturedImageUrl,
   transformBlocksToAcfComponents,
+  createAuthorBlock,
 } from "./article-mapper";
 import type { ApiContentBlock } from "@/types/api";
 import type { LocalArticleData } from "./types";
@@ -523,5 +524,97 @@ describe("transformBlocksToAcfComponents", () => {
     expect(frameBlocks.length).toBe(1);
     // Content should remain unescaped
     expect(frameBlocks[0]).toHaveProperty("frame_text", "<p>HTML content</p>");
+  });
+});
+
+describe("createAuthorBlock", () => {
+  it("creates text component with author name", () => {
+    const result = createAuthorBlock("ds. D.M. Heikoop");
+
+    expect(result.acf_fc_layout).toBe("text");
+    expect(result.text_text).toContain("ds. D.M. Heikoop");
+    expect(result.text_text).toContain("author-block");
+  });
+
+  it("includes photo when provided", () => {
+    const result = createAuthorBlock(
+      "ds. D.M. Heikoop",
+      "https://example.com/photo.jpg"
+    );
+
+    expect(result.text_text).toContain("<img");
+    expect(result.text_text).toContain("https://example.com/photo.jpg");
+    expect(result.text_text).toContain("author-photo");
+  });
+
+  it("omits photo img tag when not provided", () => {
+    const result = createAuthorBlock("ds. D.M. Heikoop");
+
+    expect(result.text_text).not.toContain("<img");
+  });
+
+  it("escapes HTML in author name", () => {
+    const result = createAuthorBlock("<script>alert('xss')</script>");
+
+    expect(result.text_text).not.toContain("<script>");
+    expect(result.text_text).toContain("&lt;script&gt;");
+  });
+
+  it("includes styling for author block", () => {
+    const result = createAuthorBlock("Test Author");
+
+    expect(result.text_text).toContain("margin-top:32px");
+    expect(result.text_text).toContain("background:#f5f5f5");
+    expect(result.text_text).toContain("border-radius:8px");
+  });
+
+  it("includes photo styling with rounded appearance", () => {
+    const result = createAuthorBlock("Test Author", "https://example.com/photo.jpg");
+
+    expect(result.text_text).toContain("width:80px");
+    expect(result.text_text).toContain("height:80px");
+    expect(result.text_text).toContain("border-radius:50%");
+    expect(result.text_text).toContain("float:left");
+  });
+
+  it("includes bio when provided", () => {
+    const result = createAuthorBlock(
+      "ds. D.M. Heikoop",
+      undefined,
+      "is predikant te Urk"
+    );
+
+    expect(result.text_text).toContain("ds. D.M. Heikoop");
+    expect(result.text_text).toContain("is predikant te Urk");
+  });
+
+  it("includes both photo and bio when provided", () => {
+    const result = createAuthorBlock(
+      "ds. D.M. Heikoop",
+      "https://example.com/photo.jpg",
+      "is predikant te Urk"
+    );
+
+    expect(result.text_text).toContain("<img");
+    expect(result.text_text).toContain("ds. D.M. Heikoop");
+    expect(result.text_text).toContain("is predikant te Urk");
+  });
+
+  it("escapes HTML in bio", () => {
+    const result = createAuthorBlock(
+      "Test Author",
+      undefined,
+      "<script>alert('xss')</script>"
+    );
+
+    expect(result.text_text).not.toContain("<script>");
+    expect(result.text_text).toContain("&lt;script&gt;");
+  });
+
+  it("handles null bio", () => {
+    const result = createAuthorBlock("ds. D.M. Heikoop", undefined, null);
+
+    expect(result.text_text).toContain("ds. D.M. Heikoop");
+    expect(result.text_text).not.toContain("null");
   });
 });
