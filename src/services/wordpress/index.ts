@@ -68,6 +68,16 @@ export * from "./category-classifier";
 const API_DELAY_MS = 100;
 
 /**
+ * Check of artikel een inhoudspagina is die overgeslagen moet worden.
+ * Inhoudspagina's staan volledig op pagina 2-3 (spread na de cover).
+ */
+function isContentPage(article: LocalArticleData): boolean {
+  const pageStart = article.pageStart ?? 0;
+  const pageEnd = article.pageEnd ?? 0;
+  return pageStart === 2 && pageEnd <= 3;
+}
+
+/**
  * Sleep helper for rate limiting
  */
 function sleep(ms: number): Promise<void> {
@@ -532,6 +542,20 @@ export async function publishEditionToWordPress(
   for (let i = 0; i < sortedArticles.length; i++) {
     const article = sortedArticles[i];
 
+    // Check of artikel moet worden overgeslagen (inhoudspagina)
+    if (isContentPage(article)) {
+      console.log(`[WordPress] Overgeslagen: "${article.title}" (inhoudspagina)`);
+      results.push({
+        articleId: article.id,
+        title: article.title,
+        success: true,
+        created: false,
+        skipped: true,
+        skipReason: "content_page",
+      });
+      continue;
+    }
+
     const result = await publishSingleArticle(
       article,
       edition.editionNumber,
@@ -555,18 +579,19 @@ export async function publishEditionToWordPress(
   clearAuthorCache();
 
   // Calculate stats
-  const articlesPublished = results.filter((r) => r.success).length;
+  const articlesSkipped = results.filter((r) => r.skipped).length;
+  const articlesPublished = results.filter((r) => r.success && !r.skipped).length;
   const articlesFailed = results.filter((r) => !r.success).length;
 
   console.log(
-    `[WordPress] Publication complete: ${articlesPublished} published, ${articlesFailed} failed`
+    `[WordPress] Publication complete: ${articlesPublished} published, ${articlesSkipped} skipped, ${articlesFailed} failed`
   );
 
   return {
     success: articlesFailed === 0,
     editionId,
     articlesPublished,
-    articlesSkipped: 0,
+    articlesSkipped,
     articlesFailed,
     results,
     errors,

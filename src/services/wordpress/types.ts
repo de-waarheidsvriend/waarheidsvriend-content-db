@@ -144,6 +144,11 @@ export interface WpApiError {
 }
 
 /**
+ * Reasons why an article can be skipped during publication
+ */
+export type ArticleSkipReason = "content_page";
+
+/**
  * Result of publishing a single article
  */
 export interface ArticlePublishResult {
@@ -154,6 +159,8 @@ export interface ArticlePublishResult {
   wpSlug?: string;
   error?: string;
   created: boolean; // true = new article, false = updated existing
+  skipped?: boolean;
+  skipReason?: ArticleSkipReason;
 }
 
 /**

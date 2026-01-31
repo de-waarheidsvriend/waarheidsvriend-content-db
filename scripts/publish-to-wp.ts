@@ -224,11 +224,15 @@ async function publishEdition(
     console.log("─".repeat(60));
 
     for (const r of result.results) {
-      const status = r.success ? "✓" : "✗";
       const title = r.title.substring(0, 40).padEnd(40);
-      const action = r.created ? "nieuw" : "update";
-      const info = r.wpPostId ? `ID: ${r.wpPostId} (${action})` : r.error || "";
-      console.log(`${status} ${title} ${info}`);
+      if (r.skipped) {
+        console.log(`⊘ ${title} overgeslagen (inhoudspagina)`);
+      } else {
+        const status = r.success ? "✓" : "✗";
+        const action = r.created ? "nieuw" : "update";
+        const info = r.wpPostId ? `ID: ${r.wpPostId} (${action})` : r.error || "";
+        console.log(`${status} ${title} ${info}`);
+      }
     }
   }
 
