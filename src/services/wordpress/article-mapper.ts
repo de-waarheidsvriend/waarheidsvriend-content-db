@@ -456,7 +456,7 @@ function getAmsterdamOffsetMinutes(date: Date): number {
 }
 
 /**
- * Format edition date for WordPress (09:00 Amsterdam time)
+ * Format edition date for WordPress (09:00 Amsterdam time) as UTC
  * Uses the edition date from the source PDF instead of calculating next Thursday.
  */
 export function formatEditionDateForWp(editionDate: Date): string {
@@ -470,6 +470,17 @@ export function formatEditionDateForWp(editionDate: Date): string {
 
   const utcDate = new Date(Date.UTC(year, month, day, utcHour, 0, 0, 0));
   return utcDate.toISOString();
+}
+
+/**
+ * Format edition date as local time (09:00 Amsterdam) without timezone suffix.
+ * WordPress REST API requires both date (local) and date_gmt (UTC) fields.
+ */
+export function formatEditionDateLocal(editionDate: Date): string {
+  const year = editionDate.getFullYear();
+  const month = String(editionDate.getMonth() + 1).padStart(2, '0');
+  const day = String(editionDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}T09:00:00`;
 }
 
 /**
@@ -515,13 +526,15 @@ export function mapArticleToWpPayload(
   const slug = generateReadableSlug(article.title);
 
   // Use edition date from source PDF (at 09:00 Amsterdam time)
-  const publishDate = formatEditionDateForWp(editionDate);
+  const dateGmt = formatEditionDateForWp(editionDate);
+  const dateLocal = formatEditionDateLocal(editionDate);
 
   return {
     title: article.title,
     slug,
     status: "draft",
-    date_gmt: publishDate,
+    date: dateLocal,
+    date_gmt: dateGmt,
     acf: {
       article_type: articleType,
       article_intro: article.chapeau || article.excerpt || "",

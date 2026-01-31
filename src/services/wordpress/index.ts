@@ -401,7 +401,20 @@ async function publishSingleArticle(
     let created: boolean;
 
     if (existingArticle) {
-      // Update existing article
+      // Check publicatiestatus - skip gepubliceerde artikelen
+      if (existingArticle.status === "publish") {
+        console.log(`[WordPress] Overgeslagen: "${article.title}" (reeds gepubliceerd)`);
+        return {
+          articleId: article.id,
+          title: article.title,
+          success: true,
+          created: false,
+          skipped: true,
+          skipReason: "already_published",
+          wpPostId: existingArticle.id,
+        };
+      }
+      // Update non-published article
       console.log(
         `[WordPress] Updating existing article: ${payload.slug} (ID: ${existingArticle.id})`
       );

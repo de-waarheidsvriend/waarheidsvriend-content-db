@@ -10,6 +10,7 @@ import {
   generateArticleSlug,
   calculatePublishDate,
   formatEditionDateForWp,
+  formatEditionDateLocal,
   mapArticleToWpPayload,
   getFeaturedImageUrl,
   transformBlocksToAcfComponents,
@@ -230,6 +231,37 @@ describe("formatEditionDateForWp", () => {
   });
 });
 
+describe("formatEditionDateLocal", () => {
+  it("formats edition date to local time string at 09:00 without timezone suffix", () => {
+    // January 30, 2026
+    const editionDate = new Date("2026-01-30T00:00:00Z");
+
+    const result = formatEditionDateLocal(editionDate);
+
+    // Should be local time format without Z suffix
+    expect(result).toBe("2026-01-30T09:00:00");
+  });
+
+  it("formats date correctly for summer dates", () => {
+    // June 15, 2026
+    const editionDate = new Date("2026-06-15T00:00:00Z");
+
+    const result = formatEditionDateLocal(editionDate);
+
+    // Should be local time format without Z suffix
+    expect(result).toBe("2026-06-15T09:00:00");
+  });
+
+  it("pads single-digit months and days with zeros", () => {
+    // March 5, 2026
+    const editionDate = new Date("2026-03-05T00:00:00Z");
+
+    const result = formatEditionDateLocal(editionDate);
+
+    expect(result).toBe("2026-03-05T09:00:00");
+  });
+});
+
 describe("mapArticleToWpPayload", () => {
   const baseArticle: LocalArticleData = {
     id: 1,
@@ -258,6 +290,15 @@ describe("mapArticleToWpPayload", () => {
     const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
 
     // Should be January 30, 2026 at 08:00 UTC (09:00 Amsterdam winter time)
+    expect(result.date_gmt).toMatch(/^2026-01-30T0[78]:00:00\.000Z$/);
+  });
+
+  it("includes both date (local) and date_gmt (UTC) fields", () => {
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
+
+    // date field should be local time without timezone suffix
+    expect(result.date).toBe("2026-01-30T09:00:00");
+    // date_gmt should be UTC (ISO format with Z)
     expect(result.date_gmt).toMatch(/^2026-01-30T0[78]:00:00\.000Z$/);
   });
 

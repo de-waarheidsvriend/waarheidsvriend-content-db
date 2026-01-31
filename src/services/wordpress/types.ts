@@ -86,7 +86,8 @@ export interface WpArticlePayload {
   title: string;
   slug: string;
   status: "draft" | "publish" | "pending" | "private";
-  date_gmt: string;
+  date: string; // Local time (Amsterdam)
+  date_gmt: string; // UTC time
   acf: WpAcfFields;
 }
 
@@ -146,7 +147,7 @@ export interface WpApiError {
 /**
  * Reasons why an article can be skipped during publication
  */
-export type ArticleSkipReason = "content_page";
+export type ArticleSkipReason = "content_page" | "already_published";
 
 /**
  * Result of publishing a single article
