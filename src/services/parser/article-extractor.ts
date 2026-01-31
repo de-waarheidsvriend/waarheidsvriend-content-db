@@ -19,6 +19,7 @@ import {
   getDominantCharOverride,
   getYRange,
   parseCharOverrideStyles,
+  normalizeWhitespace,
   type CharOverrideStyles,
 } from "./html-cleaner";
 
@@ -891,14 +892,14 @@ function buildExtractedArticle(
   let lifespan: string | null = null;
   let inMemoriamCategory = false;
 
-  const firstTitleText = htmlToPlainText(titleElements[0].content);
+  const firstTitleText = normalizeWhitespace(htmlToPlainText(titleElements[0].content));
 
   if (isInMemoriamTitle(titleElements[0].content) && titleElements.length >= 2) {
     // "In memoriam" article structure
     inMemoriamCategory = true;
 
     // Second title is the person's name
-    title = htmlToPlainText(titleElements[1].content);
+    title = normalizeWhitespace(htmlToPlainText(titleElements[1].content));
 
     // Third title (if present and matches pattern) is the lifespan
     if (titleElements.length >= 3 && isLifespanTitle(titleElements[2].content)) {
@@ -910,7 +911,7 @@ function buildExtractedArticle(
 
     // If there are additional titles (not lifespan), the second one is a subtitle
     if (titleElements.length >= 2 && !isLifespanTitle(titleElements[1].content)) {
-      subtitle = htmlToPlainText(titleElements[1].content);
+      subtitle = normalizeWhitespace(htmlToPlainText(titleElements[1].content));
     }
   }
 

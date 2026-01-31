@@ -224,7 +224,7 @@ export function getYRange(html: string): { yStart: number; yEnd: number } | null
  * Line breaks are detected by significant Y-position changes between spans.
  */
 function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<any>): string {
-  const parts: { text: string; y: number | null }[] = [];
+  const parts: { text: string; y: number | null; isIntroletter: boolean }[] = [];
 
   $el.find("span").each((_, span) => {
     const $span = $(span);
@@ -232,7 +232,9 @@ function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<any>):
     if (text) {
       const style = $span.attr("style");
       const y = getYPosition(style);
-      parts.push({ text, y });
+      const classes = ($span.attr("class") || "").toLowerCase();
+      const isIntroletter = classes.includes("introletter");
+      parts.push({ text, y, isIntroletter });
     }
   });
 
@@ -244,11 +246,20 @@ function extractTextFromSpans($: cheerio.CheerioAPI, $el: cheerio.Cheerio<any>):
   // Join parts, removing hyphens and adding line breaks where Y changes
   let result = "";
   let lastY: number | null = null;
-  let skipNextLineBreak = false; // Skip line break after word hyphenation
+  let skipNextLineBreak = false; // Skip line break after word hyphenation or introletter
 
   for (let i = 0; i < parts.length; i++) {
-    const { text, y } = parts[i];
+    const { text, y, isIntroletter } = parts[i];
     const nextPart = parts[i + 1];
+
+    // Introletter (drop cap) - add text and skip line break for next part
+    // The drop cap is visually aligned with the first line but has different Y position
+    if (isIntroletter) {
+      result += text;
+      skipNextLineBreak = true;
+      if (y !== null) lastY = y;
+      continue;
+    }
 
     // Check if this part ends with hyphen and next starts with lowercase
     // This is word hyphenation - merge the word (no line break)
@@ -340,7 +351,7 @@ export function htmlToSemanticHtml(
   const $body = $("body");
 
   // Extract text from spans with italic/bold information
-  const parts: { text: string; isItalic: boolean; isBold: boolean; y: number | null }[] = [];
+  const parts: { text: string; isItalic: boolean; isBold: boolean; y: number | null; isIntroletter: boolean }[] = [];
 
   $body.find("span").each((_, span) => {
     const $span = $(span);
@@ -370,7 +381,7 @@ export function htmlToSemanticHtml(
       }
     }
 
-    parts.push({ text, isItalic, isBold, y });
+    parts.push({ text, isItalic, isBold, y, isIntroletter });
   });
 
   if (parts.length === 0) {
@@ -380,11 +391,20 @@ export function htmlToSemanticHtml(
   // Join parts with hyphenation fix and line break detection
   let result = "";
   let lastY: number | null = null;
-  let skipNextLineBreak = false; // Skip line break after word hyphenation
+  let skipNextLineBreak = false; // Skip line break after word hyphenation or introletter
 
   for (let i = 0; i < parts.length; i++) {
-    const { text, isItalic, isBold, y } = parts[i];
+    const { text, isItalic, isBold, y, isIntroletter } = parts[i];
     const nextPart = parts[i + 1];
+
+    // Introletter (drop cap) - add text and skip line break for next part
+    // The drop cap is visually aligned with the first line but has different Y position
+    if (isIntroletter) {
+      result += wrapWithTags(text, isBold, isItalic);
+      skipNextLineBreak = true;
+      if (y !== null) lastY = y;
+      continue;
+    }
 
     // Handle hyphenation at span boundaries FIRST
     // This is word hyphenation - merge the word (no line break)
@@ -440,6 +460,19 @@ function wrapWithTags(text: string, isBold: boolean, isItalic: boolean): string 
     return `<em>${text}</em>`;
   }
   return text;
+}
+
+/**
+ * Normalize whitespace in text (replace newlines and multiple spaces with single space)
+ *
+ * Use this for titles and other single-line content that may contain
+ * line breaks from PDF/XHTML exports.
+ *
+ * @param text - Text with potential newlines and multiple spaces
+ * @returns Text with all whitespace normalized to single spaces
+ */
+export function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /**
