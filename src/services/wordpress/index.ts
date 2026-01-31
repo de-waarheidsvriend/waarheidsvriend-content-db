@@ -208,22 +208,11 @@ async function publishSingleArticle(
   };
 
   try {
-    // Step 1: Sync author(s) - try to find existing WP user
+    // Step 1: Sync author(s) - skip for now
+    // Note: The article_author ACF field expects a custom "author" post type,
+    // not a WordPress user ID. We use the fallback author block instead.
     reportProgress("syncing_author");
-    let wpAuthorId: number | undefined;
-
-    if (article.authors.length > 0) {
-      const primaryAuthor = article.authors[0];
-      if (!dryRun) {
-        const authorId = await findOrCreateWpUser(primaryAuthor.name, credentials);
-        if (authorId) {
-          wpAuthorId = authorId;
-        }
-        await sleep(API_DELAY_MS);
-      } else {
-        console.log(`[DryRun] Would sync author: ${primaryAuthor.name}`);
-      }
-    }
+    const wpAuthorId: number | undefined = undefined;
 
     // Step 2: Upload featured image
     reportProgress("uploading_image");
@@ -303,6 +292,14 @@ async function publishSingleArticle(
       wpAuthorId,
       wpImageId
     );
+
+    // Debug: Log ACF payload for troubleshooting
+    console.log(`[WordPress] ACF payload for "${article.title}" (ID: ${article.id}):`);
+    console.log(`[WordPress]   Components count: ${payload.acf.components.length}`);
+    console.log(`[WordPress]   Component types: ${payload.acf.components.map(c => c.acf_fc_layout).join(', ')}`);
+    if (dryRun) {
+      console.log(`[WordPress]   Full ACF payload:`, JSON.stringify(payload.acf, null, 2));
+    }
 
     // Add category text block at the beginning of article
     if (categoryName && !dryRun) {

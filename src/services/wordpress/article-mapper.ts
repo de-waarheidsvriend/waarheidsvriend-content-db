@@ -9,6 +9,8 @@ import type { ApiContentBlock } from "@/types/api";
 import type {
   WpAcfComponent,
   WpAcfTextComponent,
+  WpAcfQuoteComponent,
+  WpAcfFrameComponent,
   WpArticlePayload,
   LocalArticleData,
 } from "./types";
@@ -189,7 +191,40 @@ export function transformBlocksToAcfComponents(blocks: ApiContentBlock[]): WpAcf
     });
   }
 
-  return components;
+  // Filter out invalid/empty components to prevent ACF API errors
+  const validatedComponents = components.filter(component => {
+    // Text components must have non-empty content
+    if (component.acf_fc_layout === "text") {
+      const textComp = component as WpAcfTextComponent;
+      return textComp.text_text?.trim().length > 0;
+    }
+    // Quote components must have non-empty text
+    if (component.acf_fc_layout === "quote") {
+      const quoteComp = component as WpAcfQuoteComponent;
+      return quoteComp.quote_text?.trim().length > 0;
+    }
+    // Frame components must have non-empty text
+    if (component.acf_fc_layout === "frame") {
+      const frameComp = component as WpAcfFrameComponent;
+      return frameComp.frame_text?.trim().length > 0;
+    }
+    // Paywall components are always valid
+    return true;
+  });
+
+  // Fallback: ensure at least one component exists
+  if (validatedComponents.length === 0) {
+    validatedComponents.push({
+      acf_fc_layout: "text",
+      text_text: "<p>Inhoud niet beschikbaar.</p>",
+    });
+    validatedComponents.push({
+      acf_fc_layout: "paywall",
+      paywall_message: "",
+    });
+  }
+
+  return validatedComponents;
 }
 
 /**

@@ -72,6 +72,8 @@ export async function wpFetch<T>(
 
   if (!response.ok) {
     const error = data as WpApiError;
+    // Log full error details for debugging ACF validation issues
+    console.error(`[WordPress API] Full error response:`, JSON.stringify(data, null, 2));
     throw new WordPressApiError(
       error.message || `WordPress API error: ${response.statusText}`,
       error.code || "UNKNOWN_ERROR",
