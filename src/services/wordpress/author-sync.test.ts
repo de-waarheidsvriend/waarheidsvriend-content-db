@@ -129,23 +129,17 @@ describe("findOrCreateWpUser", () => {
     expect(apiClient.createUser).not.toHaveBeenCalled();
   });
 
-  it("creates new user when not found", async () => {
+  it("returns null when user not found (fallback mode)", async () => {
+    // NOTE: User creation is disabled due to WordPress permission issues.
+    // The function now returns null when a user is not found,
+    // and the publishing flow adds an author text block as fallback.
     vi.mocked(apiClient.searchUsers).mockResolvedValue([]);
-    vi.mocked(apiClient.createUser).mockResolvedValue({
-      id: 99,
-      name: "New Author",
-      slug: "new-author",
-      avatar_urls: {},
-    });
 
     const result = await findOrCreateWpUser("New Author", mockCredentials);
 
-    expect(result).toBe(99);
-    expect(apiClient.createUser).toHaveBeenCalledWith(
-      "New Author",
-      expect.stringContaining("new.author@"),
-      mockCredentials
-    );
+    expect(result).toBeNull();
+    // createUser should NOT be called (feature disabled)
+    expect(apiClient.createUser).not.toHaveBeenCalled();
   });
 
   it("returns null when user creation fails", async () => {

@@ -3,10 +3,20 @@
  *
  * Synchronizes authors between the local database and WordPress.
  * Matches authors by name, creates new WP users if not found.
+ *
+ * TODO: Toekomstige implementatie - auteurs koppelen via "authors" custom post type
+ * De huidige wp_users aanpak werkt niet (geen permissies voor rest_cannot_create_user).
+ * Zodra de "authors" post type REST API beschikbaar is:
+ * 1. Zoek auteur op naam in /wp/v2/authors endpoint
+ * 2. Koppel via article_author ACF veld (array van post IDs)
+ * 3. Verwijder het fallback tekstblok uit de article-mapper
+ *
+ * Huidige workaround: Auteur info wordt als tekstblok aan het artikel toegevoegd.
+ * Zie: createAuthorBlock() in article-mapper.ts
  */
 
 import type { WpCredentials, WpUser } from "./types";
-import { searchUsers, createUser, WordPressApiError } from "./api-client";
+import { searchUsers } from "./api-client";
 
 /**
  * Cache of WordPress users by normalized name
@@ -127,6 +137,10 @@ async function findWpUserByName(
 /**
  * Find or create a WordPress user for an author
  * Returns the WordPress user ID
+ *
+ * NOTE: User creation is temporarily disabled due to WordPress permission issues
+ * (rest_cannot_create_user). Authors are now displayed via a fallback text block.
+ * See createAuthorBlock() in article-mapper.ts
  */
 export async function findOrCreateWpUser(
   authorName: string,
@@ -141,42 +155,13 @@ export async function findOrCreateWpUser(
     return existingUser.id;
   }
 
-  // User not found, try to create one
-  try {
-    // Generate a placeholder email (required by WordPress)
-    const emailSlug = authorName
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, ".")
-      .replace(/\.+/g, ".")
-      .replace(/^\.|\.$/, "");
-    const email = `${emailSlug}@waarheidsvriend.placeholder.local`;
-
-    const newUser = await createUser(authorName, email, credentials);
-
-    // Add to cache
-    wpUserCache.set(normalizeAuthorName(newUser.name), newUser);
-
-    console.log(
-      `[AuthorSync] Created new WP user for "${authorName}": ${newUser.name} (ID: ${newUser.id})`
-    );
-    return newUser.id;
-  } catch (error) {
-    // User creation might fail due to permissions
-    if (error instanceof WordPressApiError) {
-      console.warn(
-        `[AuthorSync] Failed to create WP user for "${authorName}": ${error.code} - ${error.message}`
-      );
-
-      // If we can't create users, just skip the author
-      // The article can still be published without an author
-    } else {
-      console.error(
-        `[AuthorSync] Unexpected error creating WP user for "${authorName}":`,
-        error
-      );
-    }
-    return null;
-  }
+  // TODO: User creation disabled - WordPress returns rest_cannot_create_user
+  // Auteur info wordt nu als tekstblok aan het artikel toegevoegd (fallback).
+  // Zie createAuthorBlock() in article-mapper.ts
+  console.log(
+    `[AuthorSync] Skipped user creation for "${authorName}" (fallback active)`
+  );
+  return null;
 }
 
 /**
