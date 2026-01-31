@@ -20,18 +20,14 @@ import { config } from "dotenv";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
-// Load environment variables
+// Load environment variables BEFORE any other imports
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 config({ path: join(projectRoot, ".env.local") });
 config({ path: join(projectRoot, ".env") });
 
-import {
-  publishEditionToWordPress,
-  publishArticleToWordPress,
-  validateCredentials,
-  type PublishProgress,
-} from "@/services/wordpress";
+// Types imported separately (no side effects)
+import type { PublishProgress } from "@/services/wordpress";
 
 /**
  * Parse command line arguments
@@ -119,6 +115,9 @@ function onProgress(progress: PublishProgress): void {
     case "uploading_image":
       process.stdout.write(`\r${prefix} Uploading image: ${title}...`.padEnd(80));
       break;
+    case "classifying_category":
+      process.stdout.write(`\r${prefix} 📂 Categorie bepalen: ${title}...`.padEnd(80));
+      break;
     case "publishing":
       process.stdout.write(`\r${prefix} Publishing: ${title}...`.padEnd(80));
       break;
@@ -134,7 +133,11 @@ function onProgress(progress: PublishProgress): void {
 /**
  * Publish a single article
  */
-async function publishSingleArticle(articleId: number, dryRun: boolean): Promise<void> {
+async function publishSingleArticle(
+  articleId: number,
+  dryRun: boolean,
+  publishArticleToWordPress: typeof import("@/services/wordpress").publishArticleToWordPress
+): Promise<void> {
   console.log(`Publiceren artikel ${articleId}...\n`);
 
   const result = await publishArticleToWordPress(articleId, {
@@ -187,7 +190,11 @@ async function publishSingleArticle(articleId: number, dryRun: boolean): Promise
 /**
  * Publish all articles from an edition
  */
-async function publishEdition(editionId: number, dryRun: boolean): Promise<void> {
+async function publishEdition(
+  editionId: number,
+  dryRun: boolean,
+  publishEditionToWordPress: typeof import("@/services/wordpress").publishEditionToWordPress
+): Promise<void> {
   console.log(`Publiceren editie ${editionId}...\n`);
 
   const result = await publishEditionToWordPress(editionId, {
@@ -259,6 +266,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Dynamic import AFTER env vars are loaded
+  const {
+    publishEditionToWordPress,
+    publishArticleToWordPress,
+    validateCredentials,
+  } = await import("@/services/wordpress");
+
   console.log("═".repeat(60));
   console.log("WordPress Publicatie - De Waarheidsvriend");
   console.log("═".repeat(60));
@@ -285,9 +299,9 @@ async function main(): Promise<void> {
 
   // Publish based on mode
   if (articleId !== null) {
-    await publishSingleArticle(articleId, dryRun);
+    await publishSingleArticle(articleId, dryRun, publishArticleToWordPress);
   } else if (editionId !== null) {
-    await publishEdition(editionId, dryRun);
+    await publishEdition(editionId, dryRun, publishEditionToWordPress);
   }
 }
 
