@@ -50,13 +50,22 @@ export interface WpAcfPaywallComponent {
 }
 
 /**
+ * ACF Flexible Content component: Frame (kader/sidebar)
+ */
+export interface WpAcfFrameComponent {
+  acf_fc_layout: "frame";
+  frame_text: string;
+}
+
+/**
  * Union type for all ACF Flexible Content components
  */
 export type WpAcfComponent =
   | WpAcfTextComponent
   | WpAcfQuoteComponent
   | WpAcfTextImageComponent
-  | WpAcfPaywallComponent;
+  | WpAcfPaywallComponent
+  | WpAcfFrameComponent;
 
 /**
  * ACF fields structure for wv-articles

@@ -62,7 +62,7 @@ export function parseHtmlToBlocksWithPosition(html: string): PositionedBlock[] {
     sidebarPositions.push({ start: asideMatch.index, end: asideMatch.index + asideMatch[0].length });
     // Extract sidebar block
     const innerContent = asideMatch[0].replace(/<aside[^>]*>/, "").replace(/<\/aside>$/, "");
-    const cleanContent = cleanHtmlContent(innerContent);
+    const cleanContent = cleanSidebarContent(innerContent);
     if (cleanContent.trim()) {
       blocks.push({
         type: "sidebar",
@@ -82,7 +82,7 @@ export function parseHtmlToBlocksWithPosition(html: string): PositionedBlock[] {
     const endIndex = startIndex + innerContent.length + "</div>".length;
     sidebarPositions.push({ start: divMatch.index, end: endIndex });
 
-    const cleanContent = cleanHtmlContent(innerContent);
+    const cleanContent = cleanSidebarContent(innerContent);
     if (cleanContent.trim()) {
       blocks.push({
         type: "sidebar",
@@ -204,6 +204,52 @@ export function cleanHtmlContent(html: string): string {
 }
 
 /**
+ * Clean sidebar/frame content, preserving inline formatting tags (strong, em, b, i)
+ * but removing block-level tags and normalizing whitespace.
+ */
+export function cleanSidebarContent(html: string): string {
+  if (!html) return "";
+
+  // Preserve inline formatting tags by replacing them with placeholders
+  const preservedTags: Array<{ placeholder: string; tag: string }> = [];
+  let text = html;
+
+  // Match opening and closing inline tags
+  const inlineTagPattern = /<(\/?)(\s*)(strong|em|b|i)(\s*[^>]*)>/gi;
+  let tagIndex = 0;
+  text = text.replace(inlineTagPattern, (match, slash, ws1, tagName, attrs) => {
+    const placeholder = `__PRESERVED_${tagIndex}__`;
+    const normalizedTag = slash ? `</${tagName.toLowerCase()}>` : `<${tagName.toLowerCase()}>`;
+    preservedTags.push({ placeholder, tag: normalizedTag });
+    tagIndex++;
+    return placeholder;
+  });
+
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, " ");
+
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+
+  // Normalize whitespace
+  text = text.replace(/\s+/g, " ");
+
+  // Restore preserved tags
+  for (const { placeholder, tag } of preservedTags) {
+    text = text.replace(placeholder, tag);
+  }
+
+  return text.trim();
+}
+
+/**
  * Create image blocks from image data
  */
 export function createImageBlocks(images: ImageData[]): Omit<ApiContentBlock, "order">[] {
@@ -241,7 +287,7 @@ export function extractSidebarBlocks(html: string): Omit<ApiContentBlock, "order
   let match;
   while ((match = asidePattern.exec(html)) !== null) {
     const [, innerContent] = match;
-    const cleanContent = cleanHtmlContent(innerContent);
+    const cleanContent = cleanSidebarContent(innerContent);
     if (cleanContent.trim()) {
       blocks.push({
         type: "sidebar",
@@ -256,7 +302,7 @@ export function extractSidebarBlocks(html: string): Omit<ApiContentBlock, "order
   while ((divMatch = divStartPattern.exec(html)) !== null) {
     const startIndex = divMatch.index + divMatch[0].length;
     const innerContent = extractBalancedDivContent(html, startIndex);
-    const cleanContent = cleanHtmlContent(innerContent);
+    const cleanContent = cleanSidebarContent(innerContent);
     if (cleanContent.trim()) {
       blocks.push({
         type: "sidebar",

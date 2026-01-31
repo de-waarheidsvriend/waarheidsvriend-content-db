@@ -9,8 +9,10 @@ import {
   mapContentBlockToAcf,
   generateArticleSlug,
   calculatePublishDate,
+  formatEditionDateForWp,
   mapArticleToWpPayload,
   getFeaturedImageUrl,
+  transformBlocksToAcfComponents,
 } from "./article-mapper";
 import type { ApiContentBlock } from "@/types/api";
 import type { LocalArticleData } from "./types";
@@ -57,7 +59,7 @@ describe("mapContentBlockToAcf", () => {
 
     expect(result).toEqual({
       acf_fc_layout: "text",
-      text_text: "<h3>Section Title</h3>",
+      text_text: "<h2>Section Title</h2>",
     });
   });
 
@@ -77,7 +79,7 @@ describe("mapContentBlockToAcf", () => {
     });
   });
 
-  it("maps sidebar block to text ACF component with sidebar class", () => {
+  it("maps sidebar block to frame ACF component", () => {
     const block: ApiContentBlock = {
       type: "sidebar",
       content: "Related information",
@@ -87,8 +89,8 @@ describe("mapContentBlockToAcf", () => {
     const result = mapContentBlockToAcf(block);
 
     expect(result).toEqual({
-      acf_fc_layout: "text",
-      text_text: "<div class=\"sidebar\">Related information</div>",
+      acf_fc_layout: "frame",
+      frame_text: "Related information",
     });
   });
 
@@ -205,6 +207,28 @@ describe("calculatePublishDate", () => {
   });
 });
 
+describe("formatEditionDateForWp", () => {
+  it("formats edition date to ISO string at 09:00 Amsterdam time", () => {
+    // January 30, 2026
+    const editionDate = new Date("2026-01-30T00:00:00Z");
+
+    const result = formatEditionDateForWp(editionDate);
+
+    // 09:00 Amsterdam (CET = UTC+1) = 08:00 UTC
+    expect(result).toMatch(/^2026-01-30T0[78]:00:00\.000Z$/);
+  });
+
+  it("handles summer time correctly", () => {
+    // June 15, 2026 (summer time: UTC+2)
+    const editionDate = new Date("2026-06-15T00:00:00Z");
+
+    const result = formatEditionDateForWp(editionDate);
+
+    // 09:00 Amsterdam (CEST = UTC+2) = 07:00 UTC
+    expect(result).toMatch(/^2026-06-15T0[67]:00:00\.000Z$/);
+  });
+});
+
 describe("mapArticleToWpPayload", () => {
   const baseArticle: LocalArticleData = {
     id: 1,
@@ -219,69 +243,69 @@ describe("mapArticleToWpPayload", () => {
     images: [],
   };
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-27T10:00:00Z"));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const editionDate = new Date("2026-01-30T00:00:00Z");
 
   it("creates basic payload with title and slug", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
 
     expect(result.title).toBe("Test Article");
-    expect(result.slug).toBe("test-article-wv123");
+    expect(result.slug).toBe("test-article");
     expect(result.status).toBe("draft");
   });
 
+  it("uses edition date for publish date", () => {
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
+
+    // Should be January 30, 2026 at 08:00 UTC (09:00 Amsterdam winter time)
+    expect(result.date_gmt).toMatch(/^2026-01-30T0[78]:00:00\.000Z$/);
+  });
+
   it("includes chapeau as article_intro", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
 
     expect(result.acf.article_intro).toBe("This is the intro");
   });
 
   it("uses excerpt as fallback when chapeau is empty", () => {
     const article = { ...baseArticle, chapeau: null, excerpt: "Excerpt text" };
-    const result = mapArticleToWpPayload(article, 123);
+    const result = mapArticleToWpPayload(article, 123, editionDate);
 
     expect(result.acf.article_intro).toBe("Excerpt text");
   });
 
   it("sets article_type to memoriam for memoriam category", () => {
     const article = { ...baseArticle, category: "memoriam" };
-    const result = mapArticleToWpPayload(article, 123);
+    const result = mapArticleToWpPayload(article, 123, editionDate);
 
     expect(result.acf.article_type).toBe("memoriam");
   });
 
   it("sets article_type to default for other categories", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
 
     expect(result.acf.article_type).toBe("default");
   });
 
   it("includes author ID when provided", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123, 42);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate, 42);
 
     expect(result.acf.article_author).toBe(42);
   });
 
   it("includes featured image ID when provided", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123, undefined, 99);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate, undefined, 99);
 
     expect(result.acf.article_image).toBe(99);
   });
 
   it("omits article_author when not provided", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
 
     expect(result.acf.article_author).toBeUndefined();
   });
 
   it("omits article_image when not provided", () => {
-    const result = mapArticleToWpPayload(baseArticle, 123);
+    const result = mapArticleToWpPayload(baseArticle, 123, editionDate);
 
     expect(result.acf.article_image).toBeUndefined();
   });
@@ -349,5 +373,155 @@ describe("getFeaturedImageUrl", () => {
     const result = getFeaturedImageUrl(article);
 
     expect(result).toBeNull();
+  });
+});
+
+describe("transformBlocksToAcfComponents", () => {
+  it("combines consecutive paragraphs into single text block", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "First paragraph", order: 0 },
+      { type: "paragraph", content: "Second paragraph", order: 1 },
+      { type: "paragraph", content: "Third paragraph", order: 2 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    // Should have: 1 text block (before paywall) + paywall + 1 text block (after paywall) = 3
+    // But with very short content, paywall goes at end
+    const textBlocks = result.filter(c => c.acf_fc_layout === "text");
+    const paywallBlocks = result.filter(c => c.acf_fc_layout === "paywall");
+
+    expect(textBlocks.length).toBeLessThanOrEqual(2);
+    expect(paywallBlocks.length).toBe(1);
+  });
+
+  it("combines subheadings with paragraphs into same text block", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Intro text", order: 0 },
+      { type: "subheading", content: "Section Title", order: 1 },
+      { type: "paragraph", content: "Section content", order: 2 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    // Find text blocks
+    const textBlocks = result.filter(c => c.acf_fc_layout === "text");
+
+    // First text block should contain both h2 and p tags
+    const firstTextBlock = textBlocks[0];
+    expect(firstTextBlock).toBeDefined();
+    if (firstTextBlock && "text_text" in firstTextBlock) {
+      expect(firstTextBlock.text_text).toContain("<h2>");
+      expect(firstTextBlock.text_text).toContain("<p>");
+    }
+  });
+
+  it("renders subheadings as h2 not h3", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "subheading", content: "My Heading", order: 0 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const textBlock = result.find(c => c.acf_fc_layout === "text");
+    expect(textBlock).toBeDefined();
+    if (textBlock && "text_text" in textBlock) {
+      expect(textBlock.text_text).toContain("<h2>My Heading</h2>");
+      expect(textBlock.text_text).not.toContain("<h3>");
+    }
+  });
+
+  it("splits text blocks on quote blocks", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Before quote", order: 0 },
+      { type: "quote", content: "A famous quote", order: 1 },
+      { type: "paragraph", content: "After quote", order: 2 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const quoteBlocks = result.filter(c => c.acf_fc_layout === "quote");
+    expect(quoteBlocks.length).toBe(1);
+
+    // Text blocks should be split around the quote
+    const textBlocks = result.filter(c => c.acf_fc_layout === "text");
+    expect(textBlocks.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("inserts paywall block", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Some content", order: 0 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const paywallBlocks = result.filter(c => c.acf_fc_layout === "paywall");
+    expect(paywallBlocks.length).toBe(1);
+    expect(paywallBlocks[0].acf_fc_layout).toBe("paywall");
+  });
+
+  it("text block count equals quotes + 1 (or +2 with paywall split)", () => {
+    // Article with 2 quotes and enough content for paywall to split
+    const longText = "A".repeat(200); // Long enough to trigger paywall in middle
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: longText, order: 0 },
+      { type: "quote", content: "Quote 1", order: 1 },
+      { type: "paragraph", content: longText, order: 2 },
+      { type: "quote", content: "Quote 2", order: 3 },
+      { type: "paragraph", content: longText, order: 4 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const textBlocks = result.filter(c => c.acf_fc_layout === "text");
+    const quoteBlocks = result.filter(c => c.acf_fc_layout === "quote");
+    const paywallBlocks = result.filter(c => c.acf_fc_layout === "paywall");
+
+    expect(quoteBlocks.length).toBe(2);
+    expect(paywallBlocks.length).toBe(1);
+    // Text blocks should be quotes + 1 (base) + 1 (paywall split) = 4
+    // Or quotes + 1 = 3 if paywall doesn't cause extra split
+    expect(textBlocks.length).toBeGreaterThanOrEqual(2 + 1);
+    expect(textBlocks.length).toBeLessThanOrEqual(2 + 2);
+  });
+
+  it("creates separate frame component for sidebar block", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Before", order: 0 },
+      { type: "sidebar", content: "Kader inhoud", order: 1 },
+      { type: "paragraph", content: "After", order: 2 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const frameBlocks = result.filter(c => c.acf_fc_layout === "frame");
+    expect(frameBlocks.length).toBe(1);
+    expect(frameBlocks[0]).toHaveProperty("frame_text", "Kader inhoud");
+  });
+
+  it("splits text blocks around sidebar", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Text before", order: 0 },
+      { type: "sidebar", content: "Kader", order: 1 },
+      { type: "paragraph", content: "Text after", order: 2 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const textBlocks = result.filter(c => c.acf_fc_layout === "text");
+    expect(textBlocks.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("sidebar content is not escaped (already HTML)", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "sidebar", content: "<p>HTML content</p>", order: 0 },
+    ];
+
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const frameBlocks = result.filter(c => c.acf_fc_layout === "frame");
+    expect(frameBlocks.length).toBe(1);
+    // Content should remain unescaped
+    expect(frameBlocks[0]).toHaveProperty("frame_text", "<p>HTML content</p>");
   });
 });

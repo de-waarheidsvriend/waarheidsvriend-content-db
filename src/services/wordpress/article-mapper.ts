@@ -17,7 +17,140 @@ import {
 } from "@/lib/content-blocks";
 
 /**
+ * Convert a single content block to HTML string for combining into text components.
+ * Subheadings become <h2>, paragraphs become <p>, etc.
+ */
+function blockToHtml(block: ApiContentBlock): string {
+  switch (block.type) {
+    case "paragraph":
+      return `<p>${escapeHtml(block.content)}</p>`;
+    case "subheading":
+      return `<h2>${escapeHtml(block.content)}</h2>`;
+    case "image":
+      if (block.caption) {
+        return `<p class="image-caption"><em>${escapeHtml(block.caption)}</em></p>`;
+      }
+      return "";
+    default:
+      return `<p>${escapeHtml(block.content)}</p>`;
+  }
+}
+
+/**
+ * Calculate the character position for paywall insertion (~30% of text content).
+ * Returns the character count threshold after which the paywall should be inserted.
+ */
+function calculatePaywallPosition(blocks: ApiContentBlock[]): number {
+  // Count total text characters (excluding quotes which are separate blocks)
+  const totalChars = blocks
+    .filter(b => b.type !== "quote" && b.type !== "image")
+    .reduce((sum, b) => sum + b.content.length, 0);
+
+  return Math.floor(totalChars * 0.3);
+}
+
+/**
+ * Transform content blocks to ACF components with minimal text blocks and paywall.
+ *
+ * Rules:
+ * - Consecutive text content (paragraphs, subheadings) is combined into single text blocks
+ * - Quote and sidebar blocks cause a split (new text block starts after)
+ * - Sidebars become separate ACF frame components
+ * - A paywall is inserted after ~30% of the text content
+ * - Subheadings are rendered as <h2> within text blocks
+ */
+export function transformBlocksToAcfComponents(blocks: ApiContentBlock[]): WpAcfComponent[] {
+  const components: WpAcfComponent[] = [];
+
+  // Calculate paywall position (character count threshold)
+  const paywallCharThreshold = calculatePaywallPosition(blocks);
+  let charCount = 0;
+  let paywallInserted = false;
+
+  // Accumulator for combining text blocks
+  let currentTextHtml = "";
+
+  // Helper to flush accumulated text as a component
+  const flushTextBlock = () => {
+    if (currentTextHtml.trim()) {
+      components.push({
+        acf_fc_layout: "text",
+        text_text: currentTextHtml,
+      });
+      currentTextHtml = "";
+    }
+  };
+
+  // Helper to insert paywall if threshold reached
+  const maybeInsertPaywall = () => {
+    if (!paywallInserted && charCount >= paywallCharThreshold) {
+      // Flush current text before paywall
+      flushTextBlock();
+
+      // Insert paywall
+      components.push({
+        acf_fc_layout: "paywall",
+        paywall_message: "",
+      });
+      paywallInserted = true;
+    }
+  };
+
+  for (const block of blocks) {
+    if (block.type === "quote") {
+      // Quotes cause a split - flush text, add quote, then continue accumulating
+      flushTextBlock();
+
+      components.push({
+        acf_fc_layout: "quote",
+        quote_text: block.content,
+        quote_author: "",
+      });
+    } else if (block.type === "sidebar") {
+      // Kaders cause a split - flush text, add frame, then continue accumulating
+      flushTextBlock();
+
+      components.push({
+        acf_fc_layout: "frame",
+        frame_text: formatFrameContent(block.content),
+      });
+    } else if (block.type === "image" && !block.caption) {
+      // Skip images without captions
+      continue;
+    } else {
+      // Accumulate text content (paragraphs, subheadings, image captions)
+      const html = blockToHtml(block);
+      if (html) {
+        currentTextHtml += html;
+
+        // Track character count for paywall positioning (only for actual content)
+        if (block.type !== "image") {
+          charCount += block.content.length;
+        }
+
+        // Check if we should insert paywall after this block
+        maybeInsertPaywall();
+      }
+    }
+  }
+
+  // Flush any remaining text
+  flushTextBlock();
+
+  // If paywall wasn't inserted (very short article), insert at end
+  if (!paywallInserted && components.length > 0) {
+    components.push({
+      acf_fc_layout: "paywall",
+      paywall_message: "",
+    });
+  }
+
+  return components;
+}
+
+/**
  * Map a single content block to ACF Flexible Content component
+ * @deprecated Use transformBlocksToAcfComponents for minimal block structure with paywall
  */
 export function mapContentBlockToAcf(block: ApiContentBlock): WpAcfComponent {
   switch (block.type) {
@@ -30,7 +163,7 @@ export function mapContentBlockToAcf(block: ApiContentBlock): WpAcfComponent {
     case "subheading":
       return {
         acf_fc_layout: "text",
-        text_text: `<h3>${escapeHtml(block.content)}</h3>`,
+        text_text: `<h2>${escapeHtml(block.content)}</h2>`,
       };
 
     case "quote":
@@ -42,8 +175,8 @@ export function mapContentBlockToAcf(block: ApiContentBlock): WpAcfComponent {
 
     case "sidebar":
       return {
-        acf_fc_layout: "text",
-        text_text: `<div class="sidebar">${escapeHtml(block.content)}</div>`,
+        acf_fc_layout: "frame",
+        frame_text: formatFrameContent(block.content),
       };
 
     case "image":
@@ -82,11 +215,29 @@ function escapeHtml(text: string): string {
 }
 
 /**
+ * Format frame/kader content: add line break after title if present
+ * Transforms: "<strong>Titel</strong> tekst" → "<strong>Titel</strong><br>tekst"
+ */
+function formatFrameContent(content: string): string {
+  // Add <br> after closing </strong> tag if it's followed by text
+  return content.replace(/(<\/strong>)\s*/i, "$1<br>");
+}
+
+/**
  * Generate a URL-safe slug from title and edition number
  * Format: {title-slug}-wv{edition_number}
+ * @deprecated Use generateReadableSlug instead for cleaner URLs
  */
 export function generateArticleSlug(title: string, editionNumber: number): string {
-  const titleSlug = title
+  const titleSlug = generateReadableSlug(title);
+  return `${titleSlug}-wv${editionNumber}`;
+}
+
+/**
+ * Generate a URL-safe slug from title only (without edition suffix)
+ */
+export function generateReadableSlug(title: string): string {
+  return title
     .toLowerCase()
     // Replace Dutch special characters
     .replace(/[àáâãäå]/g, "a")
@@ -106,8 +257,6 @@ export function generateArticleSlug(title: string, editionNumber: number): strin
     .replace(/^-+|-+$/g, "")
     // Limit length
     .substring(0, 60);
-
-  return `${titleSlug}-wv${editionNumber}`;
 }
 
 /**
@@ -208,11 +357,29 @@ function getAmsterdamOffsetMinutes(date: Date): number {
 }
 
 /**
+ * Format edition date for WordPress (09:00 Amsterdam time)
+ * Uses the edition date from the source PDF instead of calculating next Thursday.
+ */
+export function formatEditionDateForWp(editionDate: Date): string {
+  const year = editionDate.getFullYear();
+  const month = editionDate.getMonth();
+  const day = editionDate.getDate();
+
+  // Calculate UTC time for 09:00 Amsterdam
+  const amsterdamOffset = getAmsterdamOffsetMinutes(editionDate);
+  const utcHour = 9 - amsterdamOffset / 60;
+
+  const utcDate = new Date(Date.UTC(year, month, day, utcHour, 0, 0, 0));
+  return utcDate.toISOString();
+}
+
+/**
  * Map a local article to WordPress payload format
  */
 export function mapArticleToWpPayload(
   article: LocalArticleData,
   editionNumber: number,
+  editionDate: Date,
   authorId?: number,
   featuredImageId?: number
 ): WpArticlePayload {
@@ -229,21 +396,19 @@ export function mapArticleToWpPayload(
     images: imageData,
   });
 
-  // Map content blocks to ACF components, filtering out nulls (skipped image blocks)
-  const components: WpAcfComponent[] = contentBlocks
-    .map(mapContentBlockToAcf)
-    .filter((c): c is WpAcfComponent => c !== null);
+  // Transform blocks to ACF components with minimal text blocks and paywall
+  const components = transformBlocksToAcfComponents(contentBlocks);
 
   // Determine article type
   const articleType = article.category?.toLowerCase() === "memoriam"
     ? "memoriam"
     : "default";
 
-  // Generate slug
-  const slug = generateArticleSlug(article.title, editionNumber);
+  // Generate slug (readable format without edition suffix)
+  const slug = generateReadableSlug(article.title);
 
-  // Calculate publish date
-  const publishDate = calculatePublishDate();
+  // Use edition date from source PDF (at 09:00 Amsterdam time)
+  const publishDate = formatEditionDateForWp(editionDate);
 
   return {
     title: article.title,
