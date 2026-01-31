@@ -618,3 +618,112 @@ describe("createAuthorBlock", () => {
     expect(result.text_text).not.toContain("null");
   });
 });
+
+describe("transformBlocksToAcfComponents with imageIdMap", () => {
+  it("converts image block to text_image component when media ID is available", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Before image", order: 0 },
+      { type: "image", content: "", imageUrl: "/uploads/test.jpg", caption: "Photo caption", order: 1 },
+      { type: "paragraph", content: "After image", order: 2 },
+    ];
+
+    const imageIdMap = new Map<string, number>();
+    imageIdMap.set("/uploads/test.jpg", 123);
+
+    const result = transformBlocksToAcfComponents(blocks, imageIdMap);
+
+    const textImageBlocks = result.filter(c => c.acf_fc_layout === "text_image");
+    expect(textImageBlocks.length).toBe(1);
+
+    const textImageBlock = textImageBlocks[0];
+    expect(textImageBlock).toHaveProperty("text_image_text", "Photo caption");
+    expect(textImageBlock).toHaveProperty("text_image_image", "123"); // String, not number
+    expect(textImageBlock).toHaveProperty("text_image_position", "center");
+  });
+
+  it("skips image block when no media ID is available", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Before image", order: 0 },
+      { type: "image", content: "", imageUrl: "/uploads/test.jpg", caption: "Photo caption", order: 1 },
+      { type: "paragraph", content: "After image", order: 2 },
+    ];
+
+    // No imageIdMap provided, or image URL not in map
+    const result = transformBlocksToAcfComponents(blocks);
+
+    const textImageBlocks = result.filter(c => c.acf_fc_layout === "text_image");
+    expect(textImageBlocks.length).toBe(0);
+
+    // Caption should NOT be included as text
+    const textBlocks = result.filter(c => c.acf_fc_layout === "text");
+    const hasCaption = textBlocks.some(
+      b => "text_text" in b && b.text_text.includes("Photo caption")
+    );
+    expect(hasCaption).toBe(false);
+  });
+
+  it("handles image without caption (empty alt-text)", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "image", content: "", imageUrl: "/uploads/test.jpg", order: 0 },
+    ];
+
+    const imageIdMap = new Map<string, number>();
+    imageIdMap.set("/uploads/test.jpg", 456);
+
+    const result = transformBlocksToAcfComponents(blocks, imageIdMap);
+
+    const textImageBlocks = result.filter(c => c.acf_fc_layout === "text_image");
+    expect(textImageBlocks.length).toBe(1);
+    expect(textImageBlocks[0]).toHaveProperty("text_image_text", "");
+  });
+
+  it("flushes text block before inserting image", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Text before", order: 0 },
+      { type: "image", content: "", imageUrl: "/uploads/test.jpg", caption: "Image", order: 1 },
+      { type: "paragraph", content: "Text after", order: 2 },
+    ];
+
+    const imageIdMap = new Map<string, number>();
+    imageIdMap.set("/uploads/test.jpg", 789);
+
+    const result = transformBlocksToAcfComponents(blocks, imageIdMap);
+
+    // Find the index of each component type
+    const textBeforeIdx = result.findIndex(
+      c => c.acf_fc_layout === "text" && "text_text" in c && c.text_text.includes("Text before")
+    );
+    const imageIdx = result.findIndex(c => c.acf_fc_layout === "text_image");
+    const textAfterIdx = result.findIndex(
+      c => c.acf_fc_layout === "text" && "text_text" in c && c.text_text.includes("Text after")
+    );
+
+    // Text before should come before image, which should come before text after
+    expect(textBeforeIdx).toBeLessThan(imageIdx);
+    expect(imageIdx).toBeLessThan(textAfterIdx);
+  });
+
+  it("handles multiple images in article", () => {
+    const blocks: ApiContentBlock[] = [
+      { type: "paragraph", content: "Intro", order: 0 },
+      { type: "image", content: "", imageUrl: "/uploads/img1.jpg", caption: "First image", order: 1 },
+      { type: "paragraph", content: "Middle", order: 2 },
+      { type: "image", content: "", imageUrl: "/uploads/img2.jpg", caption: "Second image", order: 3 },
+      { type: "paragraph", content: "Outro", order: 4 },
+    ];
+
+    const imageIdMap = new Map<string, number>();
+    imageIdMap.set("/uploads/img1.jpg", 100);
+    imageIdMap.set("/uploads/img2.jpg", 200);
+
+    const result = transformBlocksToAcfComponents(blocks, imageIdMap);
+
+    const textImageBlocks = result.filter(c => c.acf_fc_layout === "text_image");
+    expect(textImageBlocks.length).toBe(2);
+
+    expect(textImageBlocks[0]).toHaveProperty("text_image_image", "100");
+    expect(textImageBlocks[0]).toHaveProperty("text_image_text", "First image");
+    expect(textImageBlocks[1]).toHaveProperty("text_image_image", "200");
+    expect(textImageBlocks[1]).toHaveProperty("text_image_text", "Second image");
+  });
+});

@@ -10,6 +10,7 @@ import type {
   WpAcfComponent,
   WpAcfTextComponent,
   WpAcfQuoteComponent,
+  WpAcfTextImageComponent,
   WpAcfFrameComponent,
   WpArticlePayload,
   LocalArticleData,
@@ -65,6 +66,7 @@ export function createAuthorBlock(
 /**
  * Convert a single content block to HTML string for combining into text components.
  * Subheadings become <h2>, paragraphs become <p>, etc.
+ * Note: Image blocks are handled separately in transformBlocksToAcfComponents.
  */
 function blockToHtml(block: ApiContentBlock): string {
   switch (block.type) {
@@ -73,9 +75,7 @@ function blockToHtml(block: ApiContentBlock): string {
     case "subheading":
       return `<h2>${escapeHtml(block.content)}</h2>`;
     case "image":
-      if (block.caption) {
-        return `<p class="image-caption"><em>${escapeHtml(block.caption)}</em></p>`;
-      }
+      // Images are handled separately as text_image components
       return "";
     default:
       return `<p>${escapeHtml(block.content)}</p>`;
@@ -104,8 +104,15 @@ function calculatePaywallPosition(blocks: ApiContentBlock[]): number {
  * - Sidebars become separate ACF frame components
  * - A paywall is inserted after ~30% of the text content
  * - Subheadings are rendered as <h2> within text blocks
+ * - Image blocks with uploaded media IDs become text_image components
+ *
+ * @param blocks - Content blocks to transform
+ * @param imageIdMap - Optional map of local image URLs to WordPress media IDs
  */
-export function transformBlocksToAcfComponents(blocks: ApiContentBlock[]): WpAcfComponent[] {
+export function transformBlocksToAcfComponents(
+  blocks: ApiContentBlock[],
+  imageIdMap?: Map<string, number>
+): WpAcfComponent[] {
   const components: WpAcfComponent[] = [];
 
   // Calculate paywall position (character count threshold)
@@ -160,19 +167,32 @@ export function transformBlocksToAcfComponents(blocks: ApiContentBlock[]): WpAcf
         acf_fc_layout: "frame",
         frame_text: formatFrameContent(block.content),
       });
-    } else if (block.type === "image" && !block.caption) {
-      // Skip images without captions
+    } else if (block.type === "image") {
+      // Check if we have a WordPress media ID for this image
+      const wpMediaId = imageIdMap?.get(block.imageUrl || "");
+
+      if (wpMediaId) {
+        // Image was uploaded - create text_image component
+        flushTextBlock();
+
+        const textImageComponent: WpAcfTextImageComponent = {
+          acf_fc_layout: "text_image",
+          text_image_text: block.caption || "",
+          text_image_image: String(wpMediaId),
+          text_image_position: "center",
+        };
+        components.push(textImageComponent);
+      }
+      // If no media ID, skip the image entirely (don't add as caption text)
       continue;
     } else {
-      // Accumulate text content (paragraphs, subheadings, image captions)
+      // Accumulate text content (paragraphs, subheadings)
       const html = blockToHtml(block);
       if (html) {
         currentTextHtml += html;
 
-        // Track character count for paywall positioning (only for actual content)
-        if (block.type !== "image") {
-          charCount += block.content.length;
-        }
+        // Track character count for paywall positioning
+        charCount += block.content.length;
 
         // Check if we should insert paywall after this block
         maybeInsertPaywall();
@@ -454,13 +474,21 @@ export function formatEditionDateForWp(editionDate: Date): string {
 
 /**
  * Map a local article to WordPress payload format
+ *
+ * @param article - Local article data from database
+ * @param editionNumber - Edition number for slug generation
+ * @param editionDate - Edition date for publish date
+ * @param authorId - Optional WordPress author ID
+ * @param featuredImageId - Optional WordPress featured image media ID
+ * @param inlineImageIds - Optional map of local image URLs to WordPress media IDs
  */
 export function mapArticleToWpPayload(
   article: LocalArticleData,
   editionNumber: number,
   editionDate: Date,
   authorId?: number,
-  featuredImageId?: number
+  featuredImageId?: number,
+  inlineImageIds?: Map<string, number>
 ): WpArticlePayload {
   // Transform content to blocks
   const imageData: ImageData[] = article.images.map((img) => ({
@@ -476,7 +504,7 @@ export function mapArticleToWpPayload(
   });
 
   // Transform blocks to ACF components with minimal text blocks and paywall
-  const components = transformBlocksToAcfComponents(contentBlocks);
+  const components = transformBlocksToAcfComponents(contentBlocks, inlineImageIds);
 
   // Determine article type
   const articleType = article.category?.toLowerCase() === "memoriam"

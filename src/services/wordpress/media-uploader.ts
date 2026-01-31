@@ -183,6 +183,33 @@ export async function uploadAuthorPhoto(
 }
 
 /**
+ * Update the alt text for a media item in WordPress
+ */
+export async function updateMediaAltText(
+  mediaId: number,
+  altText: string,
+  credentials: WpCredentials
+): Promise<void> {
+  const url = `${credentials.apiUrl}/media/${mediaId}`;
+  const authHeader = createAuthHeader(credentials);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ alt_text: altText }),
+  });
+
+  if (!response.ok) {
+    console.warn(
+      `[MediaUploader] Failed to update alt text for media ${mediaId}: ${response.statusText}`
+    );
+  }
+}
+
+/**
  * Get the uploads directory path
  * Default is 'uploads' relative to project root
  */

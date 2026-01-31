@@ -177,7 +177,7 @@ export interface PublishProgress {
   current: number;
   total: number;
   currentArticle: string;
-  status: "uploading_image" | "syncing_author" | "classifying_category" | "publishing" | "completed" | "failed";
+  status: "uploading_image" | "uploading_inline_images" | "syncing_author" | "classifying_category" | "publishing" | "completed" | "failed";
 }
 
 /**

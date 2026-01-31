@@ -6,6 +6,8 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
+import { existsSync } from "fs";
+import { basename } from "path";
 import { prisma } from "@/lib/db";
 
 import type {
@@ -38,6 +40,9 @@ import { classifyArticleCategory } from "./category-classifier";
 import {
   uploadFeaturedImage,
   uploadAuthorPhoto,
+  uploadImage,
+  updateMediaAltText,
+  resolveLocalImagePath,
   getUploadsDir,
 } from "./media-uploader";
 
@@ -232,6 +237,48 @@ async function publishSingleArticle(
       }
     }
 
+    // Step 2.5: Upload inline images (non-featured images)
+    reportProgress("uploading_inline_images");
+    const inlineImageIds = new Map<string, number>(); // URL → WP media ID
+
+    for (const image of article.images) {
+      // Skip featured images - they're handled separately
+      if (image.isFeatured) continue;
+
+      // Also skip the first image if no featured image was explicitly set
+      // (it was used as featured image in step 2)
+      const featuredImage = article.images.find((img) => img.isFeatured);
+      if (!featuredImage && image.sortOrder === article.images[0]?.sortOrder) {
+        continue;
+      }
+
+      const localPath = resolveLocalImagePath(image.url, uploadsDir);
+      if (!existsSync(localPath)) {
+        console.warn(`[WordPress] Inline image not found: ${localPath}`);
+        continue;
+      }
+
+      if (!dryRun) {
+        try {
+          const filename = basename(image.url);
+          const result = await uploadImage(localPath, filename, credentials);
+
+          // Store alt-text (caption) on the uploaded media
+          if (image.caption) {
+            await updateMediaAltText(result.id, image.caption, credentials);
+          }
+
+          inlineImageIds.set(image.url, result.id);
+          console.log(`[WordPress] Uploaded inline image: ${filename} (ID: ${result.id})`);
+          await sleep(API_DELAY_MS);
+        } catch (error) {
+          console.error(`[WordPress] Failed to upload inline image ${image.url}:`, error);
+        }
+      } else {
+        console.log(`[DryRun] Would upload inline image: ${image.url}`);
+      }
+    }
+
     // Step 3: Upload author photo and create fallback block (if no WP author ID)
     let authorPhotoUrl: string | undefined;
 
@@ -290,7 +337,8 @@ async function publishSingleArticle(
       editionNumber,
       editionDate,
       wpAuthorId,
-      wpImageId
+      wpImageId,
+      inlineImageIds
     );
 
     // Debug: Log ACF payload for troubleshooting
